@@ -31,18 +31,18 @@
       const selection = ref('')
       const error = ref('')
       const busy = ref(false)
-      const options = computed(() => libraries.value.flatMap((library) =>
-        (library.files || []).map((file) => ({
-          label: `${file.id} · ${library.extension}/${library.id}`,
-          value: [library.extension, library.id, file.id].join('\0'),
+      const options = computed(() => libraries.value.flatMap((directory) =>
+        (directory.files || []).map((file) => ({
+          label: `${file.id} · ${directory.extension}/${directory.id}`,
+          value: [directory.extension, directory.id, file.id].join('\0'),
         })),
       ))
 
       async function reload() {
-        const response = await fetch('/api/libraries/edid', { credentials: 'same-origin' })
+        const response = await fetch('/api/video/edid', { credentials: 'same-origin' })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         const body = await response.json()
-        libraries.value = body.libraries || []
+        libraries.value = body.directories || []
       }
 
       async function apply() {
