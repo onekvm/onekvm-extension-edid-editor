@@ -81,9 +81,9 @@
   "secret_fields": [],
   "memory_budget": "1M",
   "resource_limits": {
-    "memory_max": "4M",
-    "cpu_quota": "1%",
-    "tasks_max": 1,
+    "memory_max": "8M",
+    "cpu_quota": "10%",
+    "tasks_max": 8,
     "limit_nofile": 16
   },
   "healthcheck": {
