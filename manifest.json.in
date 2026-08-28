@@ -4,15 +4,15 @@
   "i18n": {
     "default": {
       "name": "EDID Editor",
-      "description": "Provides HDMI EDID presets and a custom library. Other extensions may also publish kind edid."
+      "description": "Edit HDMI EDID files. Core applies a saved file to the capture chip."
     },
     "zh": {
       "name": "EDID 编辑器",
-      "description": "提供 HDMI EDID 预设和自定义库。其他插件也可以发布 kind 为 edid 的目录。"
+      "description": "编辑 HDMI EDID 文件。Core 负责把保存的文件应用到采集芯片。"
     },
     "zh-TW": {
       "name": "EDID 編輯器",
-      "description": "提供 HDMI EDID 預設與自訂庫。其他擴充也可以發布 kind 為 edid 的目錄。"
+      "description": "編輯 HDMI EDID 檔案。Core 負責把儲存的檔案套用到擷取晶片。"
     }
   },
   "version": "@VERSION@",
@@ -30,10 +30,22 @@
   "default_enabled": true,
   "icon": {"source": "lucide", "name": "monitor"},
   "page": {
-    "title": "EDID",
+    "title": "EDID Editor",
     "renderer": "vue",
     "entrypoint": "web/page.js",
     "icon": {"source": "lucide", "name": "monitor"}
+  },
+  "controller": {
+    "runtime": "executable",
+    "entrypoint": "bin/onekvm-extension-edid",
+    "arguments": ["--controller"],
+    "timeout_seconds": 5
+  },
+  "methods": {
+    "list": {},
+    "read": {},
+    "save": {},
+    "delete": {}
   },
   "directories": [
     {
@@ -59,10 +71,10 @@
     "properties": {
       "service_enabled": {
         "type": "boolean",
-        "title": "EDID libraries",
+        "title": "EDID file editor",
         "default": false,
         "readOnly": true,
-        "i18n": {"default": "EDID libraries", "zh": "EDID 内容库", "zh-TW": "EDID 內容庫"}
+        "i18n": {"default": "EDID file editor", "zh": "EDID 文件编辑器", "zh-TW": "EDID 檔案編輯器"}
       }
     }
   },

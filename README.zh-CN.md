@@ -1,8 +1,7 @@
 # onekvm-extension-edid
 
-OneKVM HDMI EDID 编辑器。它只是 `kind: edid` 内容库的一个提供者。Core
-会列出所有声明了 EDID 目录的已安装插件；第三方插件可以取代或与本插件并存。
+OneKVM HDMI EDID 文件编辑器。预设文件在软件包内的 `share/edid`，自定义文件在
+插件数据目录 `ONEKVM_EXTENSION_DATA/edid`。
 
-预设文件在软件包内的 `share/edid`，自定义文件在插件数据目录
-`ONEKVM_EXTENSION_DATA/edid`。Core 用内部方法 `ListDirectories("edid")`
-发现它们，通过 `/api/video/edid` 写入采集芯片。
+本插件只编辑文件。Core 用内部方法 `ListDirectories("edid")` 发现所有
+`kind=edid` 目录，通过 `PUT /api/video/edid` 把选中的文件写到采集芯片。
