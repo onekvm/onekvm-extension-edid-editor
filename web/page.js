@@ -12,7 +12,10 @@
       importFile: 'Import',
       identity: 'Identity',
       manufacturer: 'PNP manufacturer ID',
-      manufacturerHint: 'EDID encodes the vendor as three A–Z letters (VESA PNP). Put the full model in the monitor name (13 characters).',
+      manufacturerPreset: 'Vendor preset',
+      manufacturerCustom: 'Custom ID',
+      customOption: 'Custom…',
+      manufacturerHint: 'EDID encodes the vendor as three A–Z letters (VESA PNP). Pick a preset or type your own. Put the full model in the monitor name (13 characters).',
       name: 'Monitor name',
       timings: 'Declared timings',
       preferred: 'Preferred',
@@ -62,7 +65,10 @@
       importFile: '导入',
       identity: '标识',
       manufacturer: 'PNP 厂商 ID',
-      manufacturerHint: 'EDID 只能把厂商编码成 3 个 A–Z 字母（VESA PNP）。完整型号写在显示器名称里（最多 13 个字符）。',
+      manufacturerPreset: '厂商预设',
+      manufacturerCustom: '自定义 ID',
+      customOption: '自定义…',
+      manufacturerHint: 'EDID 只能把厂商编码成 3 个 A–Z 字母（VESA PNP）。可从列表选择，或自己输入。完整型号写在显示器名称里（最多 13 个字符）。',
       name: '显示器名称',
       timings: '声明的时序',
       preferred: '首选',
@@ -112,7 +118,10 @@
       importFile: '匯入',
       identity: '識別',
       manufacturer: 'PNP 廠商 ID',
-      manufacturerHint: 'EDID 只能把廠商編碼成 3 個 A–Z 字母（VESA PNP）。完整型號寫在顯示器名稱裡（最多 13 個字元）。',
+      manufacturerPreset: '廠商預設',
+      manufacturerCustom: '自訂 ID',
+      customOption: '自訂…',
+      manufacturerHint: 'EDID 只能把廠商編碼成 3 個 A–Z 字母（VESA PNP）。可從清單選擇，或自行輸入。完整型號寫在顯示器名稱裡（最多 13 個字元）。',
       name: '顯示器名稱',
       timings: '宣告的時序',
       preferred: '首選',
@@ -158,6 +167,37 @@
   const BLOCK = 128
   const SUFFIX = '.edid.bin'
   const ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/
+  const PNP_CUSTOM = '__custom__'
+  const PNP_PRESETS = [
+    { id: 'OKV', name: 'OneKVM' },
+    { id: 'SAM', name: 'Samsung' },
+    { id: 'LGD', name: 'LG Display' },
+    { id: 'GSM', name: 'LG' },
+    { id: 'DEL', name: 'Dell' },
+    { id: 'HPN', name: 'HP' },
+    { id: 'ACR', name: 'Acer' },
+    { id: 'AUS', name: 'ASUS' },
+    { id: 'MSI', name: 'MSI' },
+    { id: 'LEN', name: 'Lenovo' },
+    { id: 'APP', name: 'Apple' },
+    { id: 'SNY', name: 'Sony' },
+    { id: 'VSC', name: 'ViewSonic' },
+    { id: 'BNQ', name: 'BenQ' },
+    { id: 'AOC', name: 'AOC' },
+    { id: 'PHL', name: 'Philips' },
+    { id: 'SHP', name: 'Sharp' },
+    { id: 'TSB', name: 'Toshiba' },
+    { id: 'NEC', name: 'NEC' },
+    { id: 'IVM', name: 'Iiyama' },
+    { id: 'AUO', name: 'AU Optronics' },
+    { id: 'BOE', name: 'BOE' },
+    { id: 'CMN', name: 'Chi Mei' },
+    { id: 'QDS', name: 'Quanta Display' },
+  ]
+  function pnpLabel(id) {
+    const hit = PNP_PRESETS.find((item) => item.id === id)
+    return hit ? `${hit.id} · ${hit.name}` : id
+  }
   const TEMPLATES = [
     { id: '1080p60', label: '1920×1080 @ 60', width: 1920, height: 1080, fps: 60, pixclk: 14850, hblank: 280, vblank: 45, hso: 88, hsw: 44, vso: 4, vsw: 5 },
     { id: '1440p30', label: '2560×1440 @ 30', width: 2560, height: 1440, fps: 30, pixclk: 14625, hblank: 160, vblank: 37, hso: 48, hsw: 32, vso: 3, vsw: 5 },
@@ -447,6 +487,13 @@
       const templateOptions = TEMPLATES.map((item) => ({ label: item.label, value: item.id }))
       const loaded = computed(() => validEdid(bytesFromHex(hex.value)))
       const canDelete = computed(() => isCustomPath(loadedPath.value) && custom.value.some((file) => file.id === idFromPath(loadedPath.value)))
+      const pnpOptions = computed(() => [
+        ...PNP_PRESETS.map((item) => ({ label: `${item.id} · ${item.name}`, value: item.id })),
+        { label: t('customOption'), value: PNP_CUSTOM },
+      ])
+      const manufacturerSelect = computed(() => (
+        PNP_PRESETS.some((item) => item.id === manufacturer.value) ? manufacturer.value : PNP_CUSTOM
+      ))
 
       function applyBytes(data, meta) {
         if (!validEdid(data)) throw new Error(t('invalidEdid'))
@@ -673,7 +720,7 @@
         row(t('filePath'), h(NInput, { value: loadedPath.value || t('hdmi'), readonly: true })),
         row(t('source'), h('p', { class: 'edid-hint' }, sourceLabel.value || t('empty'))),
         loaded.value ? h('dl', { class: 'edid-props' }, [
-          h('dt', t('manufacturer')), h('dd', manufacturer.value),
+          h('dt', t('manufacturer')), h('dd', pnpLabel(manufacturer.value)),
           h('dt', t('name')), h('dd', monitorName.value),
           h('dt', t('size')), h('dd', `${(hex.value.length / 2) | 0} B`),
           h('dt', t('timings')), h('dd', timings.value.map(timingLabel).join(', ')),
@@ -704,10 +751,27 @@
         })),
         isPresetPath(loadedPath.value) ? h(NAlert, { type: 'info', showIcon: false }, { default: () => t('presetReadOnly') }) : null,
         h('h3', t('identity')),
-        row(t('manufacturer'), h(NInput, {
+        row(t('manufacturerPreset'), h(NSelect, {
+          value: manufacturerSelect.value,
+          options: pnpOptions.value,
+          filterable: true,
+          'onUpdate:value': (value) => {
+            if (!value || value === PNP_CUSTOM) {
+              if (PNP_PRESETS.some((item) => item.id === manufacturer.value)) manufacturer.value = ''
+              return
+            }
+            manufacturer.value = value
+            rebuildFromFields()
+          },
+        })),
+        row(t('manufacturerCustom'), h(NInput, {
           value: manufacturer.value,
           maxlength: 3,
-          'onUpdate:value': (value) => { manufacturer.value = String(value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3); rebuildFromFields() },
+          placeholder: 'OKV',
+          'onUpdate:value': (value) => {
+            manufacturer.value = String(value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
+            rebuildFromFields()
+          },
         })),
         h('p', { class: 'edid-hint' }, t('manufacturerHint')),
         row(t('name'), h(NInput, {
