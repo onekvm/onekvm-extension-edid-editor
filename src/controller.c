@@ -11,6 +11,8 @@
 #define MAX_STDIN (64 * 1024)
 #define MAX_EDID 512
 #define BLOCK 128
+#define EDID_SUFFIX ".edid.bin"
+#define LEGACY_SUFFIX ".bin"
 
 static char stdin_buf[MAX_STDIN + 1];
 
@@ -240,12 +242,13 @@ static int write_file_atomic(const char *dir, const char *id, const unsigned cha
 {
     char path[512];
     char tmp[512];
+    char legacy[512];
     FILE *fp;
     if (mkdir_p(dir) != 0)
         return -1;
-    if (snprintf(tmp, sizeof(tmp), "%s/.%s.bin.tmp", dir, id) >= (int)sizeof(tmp))
+    if (snprintf(tmp, sizeof(tmp), "%s/.%s.edid.bin.tmp", dir, id) >= (int)sizeof(tmp))
         return -1;
-    if (snprintf(path, sizeof(path), "%s/%s.bin", dir, id) >= (int)sizeof(path))
+    if (snprintf(path, sizeof(path), "%s/%s%s", dir, id, EDID_SUFFIX) >= (int)sizeof(path))
         return -1;
     fp = fopen(tmp, "wb");
     if (fp == NULL)
@@ -267,7 +270,40 @@ static int write_file_atomic(const char *dir, const char *id, const unsigned cha
         unlink(tmp);
         return -1;
     }
+    if (snprintf(legacy, sizeof(legacy), "%s/%s%s", dir, id, LEGACY_SUFFIX) < (int)sizeof(legacy))
+        unlink(legacy);
     return 0;
+}
+
+static int id_from_filename(const char *name, char *id, size_t id_size)
+{
+    size_t n = strlen(name);
+    size_t cut;
+
+    if (n > 9 && strcmp(name + n - 9, EDID_SUFFIX) == 0)
+        cut = n - 9;
+    else if (n > 4 && strcmp(name + n - 4, LEGACY_SUFFIX) == 0)
+        cut = n - 4;
+    else
+        return -1;
+    if (cut == 0 || cut >= id_size)
+        return -1;
+    memcpy(id, name, cut);
+    id[cut] = '\0';
+    return valid_id(id) ? 0 : -1;
+}
+
+static int resolve_existing(const char *dir, const char *id, char *out, size_t out_size)
+{
+    if (snprintf(out, out_size, "%s/%s%s", dir, id, EDID_SUFFIX) >= (int)out_size)
+        return -1;
+    if (access(out, R_OK) == 0)
+        return 0;
+    if (snprintf(out, out_size, "%s/%s%s", dir, id, LEGACY_SUFFIX) >= (int)out_size)
+        return -1;
+    if (access(out, R_OK) == 0)
+        return 0;
+    return -1;
 }
 
 static void plan_ok(const char *response_json)
@@ -293,10 +329,10 @@ static void custom_dir(char *out, size_t out_size)
         fail("custom directory path is too long");
 }
 
-static void preset_path(char *out, size_t out_size, const char *id)
+static const char *basename_of(const char *path)
 {
-    if (snprintf(out, out_size, "share/edid/%s.bin", id) >= (int)out_size)
-        fail("preset path is too long");
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
 }
 
 static const char *invoke_request(void)
@@ -317,7 +353,7 @@ static int append_json(char *out, size_t out_size, size_t *len, const char *chun
     return 0;
 }
 
-static int list_dir_files(const char *dir, char *out, size_t out_size, size_t *len, int *first)
+static int list_dir_files(const char *dir, const char *rel_prefix, char *out, size_t out_size, size_t *len, int *first)
 {
     DIR *d = opendir(dir);
     struct dirent *ent;
@@ -325,27 +361,30 @@ static int list_dir_files(const char *dir, char *out, size_t out_size, size_t *l
         return errno == ENOENT ? 0 : -1;
     while ((ent = readdir(d)) != NULL) {
         char path[512];
-        char item[160];
+        char newer[512];
+        char item[256];
         char id[64];
         unsigned char data[MAX_EDID];
         size_t n = 0;
         size_t name_len;
+        int legacy;
+
         if (ent->d_name[0] == '.')
             continue;
+        if (id_from_filename(ent->d_name, id, sizeof(id)) != 0)
+            continue;
         name_len = strlen(ent->d_name);
-        if (name_len < 5 || name_len > 67)
-            continue;
-        if (strcmp(ent->d_name + name_len - 4, ".bin") != 0)
-            continue;
-        memcpy(id, ent->d_name, name_len - 4);
-        id[name_len - 4] = '\0';
-        if (!valid_id(id))
+        legacy = name_len > 4 && strcmp(ent->d_name + name_len - 4, LEGACY_SUFFIX) == 0
+            && (name_len < 9 || strcmp(ent->d_name + name_len - 9, EDID_SUFFIX) != 0);
+        if (legacy && snprintf(newer, sizeof(newer), "%s/%s%s", dir, id, EDID_SUFFIX) < (int)sizeof(newer)
+            && access(newer, R_OK) == 0)
             continue;
         if (snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name) >= (int)sizeof(path))
             continue;
         if (read_file(path, data, &n) != 0)
             continue;
-        if (snprintf(item, sizeof(item), "%s{\"id\":\"%s\",\"size\":%zu}", *first ? "" : ",", id, n) >= (int)sizeof(item))
+        if (snprintf(item, sizeof(item), "%s{\"id\":\"%s\",\"size\":%zu,\"path\":\"%s/%s\"}",
+                     *first ? "" : ",", id, n, rel_prefix, ent->d_name) >= (int)sizeof(item))
             continue;
         if (append_json(out, out_size, len, item) != 0) {
             closedir(d);
@@ -367,13 +406,13 @@ static void handle_list(void)
     if (append_json(json, sizeof(json), &len, "{\"ok\":true,\"presets\":[") != 0)
         fail("list response is too large");
     first = 1;
-    if (list_dir_files("share/edid", json, sizeof(json), &len, &first) != 0)
+    if (list_dir_files("share/edid", "share/edid", json, sizeof(json), &len, &first) != 0)
         fail("read preset EDID directory failed");
     if (append_json(json, sizeof(json), &len, "],\"custom\":[") != 0)
         fail("list response is too large");
     first = 1;
     custom_dir(dir, sizeof(dir));
-    if (list_dir_files(dir, json, sizeof(json), &len, &first) != 0)
+    if (list_dir_files(dir, "edid", json, sizeof(json), &len, &first) != 0)
         fail("read custom EDID directory failed");
     if (append_json(json, sizeof(json), &len, "]}") != 0)
         fail("list response is too large");
@@ -394,20 +433,21 @@ static void handle_read(const char *request)
         fail("read requires source and id");
     if (!valid_id(id))
         fail("invalid EDID id");
-    if (strcmp(source, "preset") == 0)
-        preset_path(path, sizeof(path), id);
-    else if (strcmp(source, "custom") == 0) {
+    if (strcmp(source, "preset") == 0) {
+        if (resolve_existing("share/edid", id, path, sizeof(path)) != 0)
+            fail("EDID file not found or invalid");
+    } else if (strcmp(source, "custom") == 0) {
         char dir[512];
         custom_dir(dir, sizeof(dir));
-        if (snprintf(path, sizeof(path), "%s/%s.bin", dir, id) >= (int)sizeof(path))
-            fail("custom path is too long");
+        if (resolve_existing(dir, id, path, sizeof(path)) != 0)
+            fail("EDID file not found or invalid");
     } else
         fail("source must be preset or custom");
     if (read_file(path, data, &n) != 0)
         fail("EDID file not found or invalid");
     encode_hex(data, n, hex, sizeof(hex));
-    printf("{\"actions\":[],\"response\":{\"ok\":true,\"id\":\"%s\",\"source\":\"%s\",\"data_hex\":\"%s\"}}\n",
-           id, source, hex);
+    printf("{\"actions\":[],\"response\":{\"ok\":true,\"id\":\"%s\",\"source\":\"%s\",\"path\":\"%s/%s\",\"data_hex\":\"%s\"}}\n",
+           id, source, strcmp(source, "preset") == 0 ? "share/edid" : "edid", basename_of(path), hex);
 }
 
 static void handle_save(const char *request)
@@ -428,7 +468,8 @@ static void handle_save(const char *request)
     custom_dir(dir, sizeof(dir));
     if (write_file_atomic(dir, id, data, n) != 0)
         fail("write custom EDID failed");
-    plan_ok("{\"ok\":true}");
+    printf("{\"actions\":[],\"response\":{\"ok\":true,\"id\":\"%s\",\"path\":\"edid/%s%s\"}}\n",
+           id, id, EDID_SUFFIX);
 }
 
 static void handle_delete(const char *request)
@@ -442,12 +483,14 @@ static void handle_delete(const char *request)
     if (!valid_id(id))
         fail("invalid EDID id");
     custom_dir(dir, sizeof(dir));
-    if (snprintf(path, sizeof(path), "%s/%s.bin", dir, id) >= (int)sizeof(path))
-        fail("custom path is too long");
-    if (unlink(path) != 0) {
-        if (errno == ENOENT)
-            fail("EDID file not found");
+    if (resolve_existing(dir, id, path, sizeof(path)) != 0)
+        fail("EDID file not found");
+    if (unlink(path) != 0)
         fail("delete custom EDID failed");
+    {
+        char other[512];
+        if (resolve_existing(dir, id, other, sizeof(other)) == 0)
+            unlink(other);
     }
     plan_ok("{\"ok\":true}");
 }
