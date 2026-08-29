@@ -494,7 +494,7 @@
       const syncing = ref(false)
       const importInput = ref(null)
       const hexGridEl = ref(null)
-      const hexCursor = ref({ index: 0, nibble: 0 })
+      const hexCursor = ref({ index: 0, nibble: 0, pane: 'hex' })
       const dialog = useDialog()
 
       const fileOptions = computed(() => [
@@ -526,7 +526,9 @@
         pnpCustom.value = !PNP_PRESETS.some((item) => item.id === manufacturer.value)
         if (meta.kind === 'custom' && meta.id) fileName.value = fileLabel(meta.id)
         else if (meta.fileName) fileName.value = meta.fileName
-        if (hexCursor.value.index >= data.length) hexCursor.value = { index: Math.max(0, data.length - 1), nibble: 0 }
+        if (hexCursor.value.index >= data.length) {
+          hexCursor.value = { index: Math.max(0, data.length - 1), nibble: 0, pane: hexCursor.value.pane || 'hex' }
+        }
         syncing.value = false
       }
 
@@ -723,14 +725,36 @@
         return bytesFromHex(hex.value) || new Uint8Array(0)
       }
 
-      function moveCursor(index, nibble) {
+      function moveCursor(index, nibble, pane) {
         const data = currentBytes()
         if (!data.length) {
-          hexCursor.value = { index: 0, nibble: 0 }
+          hexCursor.value = { index: 0, nibble: 0, pane: pane || 'hex' }
           return
         }
-        const next = Math.max(0, Math.min(data.length - 1, index))
-        hexCursor.value = { index: next, nibble: nibble ? 1 : 0 }
+        hexCursor.value = {
+          index: Math.max(0, Math.min(data.length - 1, index)),
+          nibble: nibble ? 1 : 0,
+          pane: pane || hexCursor.value.pane || 'hex',
+        }
+      }
+
+      function commitBytes(data, cursor) {
+        const index = Math.max(0, Math.min(data.length - 1, cursor.index))
+        if (index % BLOCK !== BLOCK - 1) fixChecksums(data)
+        hex.value = hexFromBytes(data)
+        if (validEdid(data)) {
+          syncing.value = true
+          manufacturer.value = manufacturerOf(data) || manufacturer.value
+          monitorName.value = monitorNameOf(data) || monitorName.value
+          timings.value = parseTimings(data)
+          pnpCustom.value = !PNP_PRESETS.some((item) => item.id === manufacturer.value)
+          syncing.value = false
+        }
+        hexCursor.value = {
+          index: Math.max(0, Math.min(data.length - 1, cursor.index)),
+          nibble: cursor.nibble ? 1 : 0,
+          pane: cursor.pane || 'hex',
+        }
       }
 
       function writeNibble(digit) {
@@ -743,17 +767,48 @@
         data[index] = cursor.nibble === 0
           ? ((value << 4) | (data[index] & 0x0f))
           : ((data[index] & 0xf0) | value)
-        fixChecksums(data)
-        if (!validEdid(data)) return
-        applyBytes(data, { kind: loadedKind.value, id: loadedId.value, fileName: fileName.value })
-        if (cursor.nibble === 0) moveCursor(index, 1)
-        else moveCursor(index + 1, 0)
+        if (cursor.nibble === 0) commitBytes(data, { index, nibble: 1, pane: 'hex' })
+        else commitBytes(data, { index: index + 1, nibble: 0, pane: 'hex' })
+      }
+
+      function writeAscii(character) {
+        if (character.length !== 1) return
+        const data = Uint8Array.from(currentBytes())
+        if (!data.length) return
+        const index = Math.max(0, Math.min(data.length - 1, hexCursor.value.index))
+        data[index] = character.charCodeAt(0) & 0xff
+        commitBytes(data, { index: index + 1, nibble: 0, pane: 'ascii' })
       }
 
       function onHexKey(event) {
         const data = currentBytes()
         if (!data.length) return
         const cursor = hexCursor.value
+        if (event.ctrlKey || event.metaKey || event.altKey) return
+        if (cursor.pane === 'ascii') {
+          if (event.key.length === 1) {
+            event.preventDefault()
+            writeAscii(event.key)
+            return
+          }
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault()
+            moveCursor(cursor.index - 1, 0, 'ascii')
+          } else if (event.key === 'ArrowRight') {
+            event.preventDefault()
+            moveCursor(cursor.index + 1, 0, 'ascii')
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            moveCursor(cursor.index - 16, 0, 'ascii')
+          } else if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            moveCursor(cursor.index + 16, 0, 'ascii')
+          } else if (event.key === 'Backspace') {
+            event.preventDefault()
+            moveCursor(cursor.index - 1, 0, 'ascii')
+          }
+          return
+        }
         if (/^[0-9a-fA-F]$/.test(event.key)) {
           event.preventDefault()
           writeNibble(event.key)
@@ -761,59 +816,73 @@
         }
         if (event.key === 'ArrowLeft') {
           event.preventDefault()
-          if (cursor.nibble === 1) moveCursor(cursor.index, 0)
-          else moveCursor(cursor.index - 1, 1)
+          if (cursor.nibble === 1) moveCursor(cursor.index, 0, 'hex')
+          else moveCursor(cursor.index - 1, 1, 'hex')
         } else if (event.key === 'ArrowRight') {
           event.preventDefault()
-          if (cursor.nibble === 0) moveCursor(cursor.index, 1)
-          else moveCursor(cursor.index + 1, 0)
+          if (cursor.nibble === 0) moveCursor(cursor.index, 1, 'hex')
+          else moveCursor(cursor.index + 1, 0, 'hex')
         } else if (event.key === 'ArrowUp') {
           event.preventDefault()
-          moveCursor(cursor.index - 16, cursor.nibble)
+          moveCursor(cursor.index - 16, cursor.nibble, 'hex')
         } else if (event.key === 'ArrowDown') {
           event.preventDefault()
-          moveCursor(cursor.index + 16, cursor.nibble)
+          moveCursor(cursor.index + 16, cursor.nibble, 'hex')
         } else if (event.key === 'Backspace') {
           event.preventDefault()
-          if (cursor.nibble === 1) moveCursor(cursor.index, 0)
-          else moveCursor(cursor.index - 1, 1)
+          if (cursor.nibble === 1) moveCursor(cursor.index, 0, 'hex')
+          else moveCursor(cursor.index - 1, 1, 'hex')
+        } else if (event.key === 'Tab') {
+          event.preventDefault()
+          moveCursor(cursor.index, 0, cursor.pane === 'hex' ? 'ascii' : 'hex')
         }
       }
 
-      function selectByte(index) {
-        moveCursor(index, 0)
+      function selectByte(index, pane) {
+        moveCursor(index, 0, pane || 'hex')
         hexGridEl.value?.focus()
       }
 
       const hexField = (editable) => {
         const data = currentBytes()
+        const cursor = hexCursor.value
         const rows = []
         for (let offset = 0; offset < data.length; offset += 16) {
-          const cells = []
-          let ascii = ''
+          const left = []
+          const right = []
+          const ascii = []
           for (let col = 0; col < 16; col++) {
             const index = offset + col
+            const group = col < 8 ? left : right
             if (index >= data.length) {
-              cells.push(h('span', { class: 'edid-hex-byte is-empty' }, '  '))
-              ascii += ' '
+              group.push(h('span', { class: 'edid-hex-byte is-empty' }, '  '))
+              ascii.push(h('span', { class: 'edid-hex-asc is-empty' }, ' '))
               continue
             }
-            const selected = editable && hexCursor.value.index === index
-            ascii += data[index] >= 32 && data[index] < 127 ? String.fromCharCode(data[index]) : '.'
+            const selected = editable && cursor.index === index
+            const ch = data[index] >= 32 && data[index] < 127 ? String.fromCharCode(data[index]) : '.'
             const text = data[index].toString(16).padStart(2, '0')
-            cells.push(h('button', {
+            group.push(h('button', {
               type: 'button',
-              class: ['edid-hex-byte', selected ? 'is-selected' : '', col === 8 ? 'is-gap' : ''].filter(Boolean).join(' '),
-              onClick: () => { if (editable) selectByte(index) },
+              class: ['edid-hex-byte', selected && cursor.pane === 'hex' ? 'is-selected' : ''].filter(Boolean).join(' '),
+              onClick: () => { if (editable) selectByte(index, 'hex') },
             }, [
-              h('span', { class: selected && hexCursor.value.nibble === 0 ? 'is-nib' : '' }, text[0]),
-              h('span', { class: selected && hexCursor.value.nibble === 1 ? 'is-nib' : '' }, text[1]),
+              h('span', { class: selected && cursor.pane === 'hex' && cursor.nibble === 0 ? 'is-nib' : '' }, text[0]),
+              h('span', { class: selected && cursor.pane === 'hex' && cursor.nibble === 1 ? 'is-nib' : '' }, text[1]),
             ]))
+            ascii.push(h('button', {
+              type: 'button',
+              class: ['edid-hex-asc', selected && cursor.pane === 'ascii' ? 'is-selected' : ''].filter(Boolean).join(' '),
+              onClick: () => { if (editable) selectByte(index, 'ascii') },
+            }, ch))
           }
           rows.push(h('div', { class: 'edid-hex-row' }, [
             h('span', { class: 'edid-hex-off' }, offset.toString(16).padStart(4, '0')),
-            h('div', { class: 'edid-hex-bytes' }, cells),
-            h('span', { class: 'edid-hex-ascii' }, ascii),
+            h('div', { class: 'edid-hex-bytes' }, [
+              h('div', { class: 'edid-hex-group' }, left),
+              h('div', { class: 'edid-hex-group' }, right),
+            ]),
+            h('div', { class: 'edid-hex-ascii' }, ascii),
           ]))
         }
         return h('div', { class: 'edid-hex-wrap' }, [
@@ -983,10 +1052,12 @@
         line-height: 1.5;
       }
       .edid-hex-grid.is-edit:focus { box-shadow: inset 0 0 0 1px rgba(24,160,88,0.7); }
-      .edid-hex-row { display: grid; grid-template-columns: 3.2em minmax(18em, 1fr) 12em; gap: 10px; align-items: center; }
+      .edid-hex-row { display: grid; grid-template-columns: 3.2em max-content max-content; gap: 12px; align-items: center; }
       .edid-hex-off { opacity: 0.55; }
-      .edid-hex-bytes { display: grid; grid-template-columns: repeat(16, 1.7em); column-gap: 4px; }
-      .edid-hex-byte {
+      .edid-hex-bytes { display: flex; gap: 12px; }
+      .edid-hex-group { display: grid; grid-template-columns: repeat(8, 1.75em); }
+      .edid-hex-ascii { display: grid; grid-template-columns: repeat(16, 1em); }
+      .edid-hex-byte, .edid-hex-asc {
         margin: 0;
         padding: 0;
         border: 0;
@@ -994,14 +1065,13 @@
         background: transparent;
         color: inherit;
         font: inherit;
+        line-height: 1.5;
         text-align: center;
         cursor: default;
       }
-      .edid-hex-grid.is-edit .edid-hex-byte { cursor: text; }
-      .edid-hex-byte.is-gap { margin-left: 6px; }
-      .edid-hex-byte.is-selected { background: #18a058; color: #fff; }
+      .edid-hex-grid.is-edit .edid-hex-byte, .edid-hex-grid.is-edit .edid-hex-asc { cursor: text; }
+      .edid-hex-byte.is-selected, .edid-hex-asc.is-selected { background: #18a058; color: #fff; }
       .edid-hex-byte .is-nib { text-decoration: underline; }
-      .edid-hex-ascii { opacity: 0.7; letter-spacing: 0.04em; }
     `],
   })
 })()
