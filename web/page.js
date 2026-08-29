@@ -28,7 +28,8 @@
       pixclk: 'Pixel clock (10 kHz)',
       hblank: 'H blank',
       vblank: 'V blank',
-      hex: 'Raw EDID hex',
+      hex: 'EDID hex',
+      hexViewer: 'HEX viewer',
       fileName: 'File name',
       filePlaceholder: 'my-display.edid.bin',
       save: 'Save custom file',
@@ -80,7 +81,8 @@
       pixclk: '像素时钟（10 kHz）',
       hblank: '水平消隐',
       vblank: '垂直消隐',
-      hex: '原始 EDID 十六进制',
+      hex: 'EDID 十六进制',
+      hexViewer: 'HEX 查看器',
       fileName: '文件名',
       filePlaceholder: 'my-display.edid.bin',
       save: '保存自定义文件',
@@ -132,7 +134,8 @@
       pixclk: '像素時脈（10 kHz）',
       hblank: '水平消隱',
       vblank: '垂直消隱',
-      hex: '原始 EDID 十六進位',
+      hex: 'EDID 十六進位',
+      hexViewer: 'HEX 檢視器',
       fileName: '檔名',
       filePlaceholder: 'my-display.edid.bin',
       save: '儲存自訂檔案',
@@ -193,7 +196,7 @@
   ]
   function pnpLabel(id) {
     const hit = PNP_PRESETS.find((item) => item.id === id)
-    return hit ? `${hit.id} · ${hit.name}` : id
+    return hit ? `${hit.id} - ${hit.name}` : id
   }
   const TEMPLATES = [
     { id: '1080p60', label: '1920×1080 @ 60', width: 1920, height: 1080, fps: 60, pixclk: 14850, hblank: 280, vblank: 45, hso: 88, hsw: 44, vso: 4, vsw: 5 },
@@ -472,7 +475,7 @@
       const loaded = computed(() => validEdid(bytesFromHex(hex.value)))
       const canDelete = computed(() => loadedKind.value === 'custom' && custom.value.some((file) => file.id === loadedId.value))
       const pnpOptions = computed(() => [
-        ...PNP_PRESETS.map((item) => ({ label: `${item.id} · ${item.name}`, value: item.id })),
+        ...PNP_PRESETS.map((item) => ({ label: `${item.id} - ${item.name}`, value: item.id })),
         { label: t('customOption'), value: PNP_CUSTOM },
       ])
       const manufacturerSelect = computed(() => (
@@ -690,7 +693,20 @@
       })
 
       const row = (label, control) => h('label', { class: 'edid-row' }, [h('span', label), control])
-      const timingLabel = (timing) => `${timing.width}×${timing.height}@${timing.fps}${timing.preferred ? ` · ${t('preferred')}` : ''}`
+      function hexDump(value) {
+        const data = bytesFromHex(value)
+        if (!data) return ''
+        const lines = []
+        for (let offset = 0; offset < data.length; offset += 16) {
+          const slice = data.subarray(offset, offset + 16)
+          const bytes = Array.from(slice, (byte) => byte.toString(16).padStart(2, '0'))
+          const ascii = Array.from(slice, (byte) => (byte >= 32 && byte < 127 ? String.fromCharCode(byte) : '.')).join('')
+          lines.push(`${offset.toString(16).padStart(4, '0')}  ${bytes.slice(0, 8).join(' ').padEnd(23)} ${bytes.slice(8).join(' ').padEnd(23)}  |${ascii.padEnd(16)}|`)
+        }
+        return lines.join('\n')
+      }
+
+      const timingLabel = (timing) => `${timing.width}×${timing.height}@${timing.fps}${timing.preferred ? ` - ${t('preferred')}` : ''}`
 
       const viewPane = () => [
         h(NSelect, {
@@ -709,6 +725,8 @@
           h('dt', t('size')), h('dd', `${(hex.value.length / 2) | 0} B`),
           h('dt', t('timings')), h('dd', timings.value.map(timingLabel).join(', ')),
         ]) : h('p', t('empty')),
+        h('h3', t('hexViewer')),
+        loaded.value ? h('pre', { class: 'edid-hex' }, hexDump(hex.value)) : h('p', t('empty')),
         h('div', { class: 'edid-actions' }, [
           h(NButton, { type: 'primary', disabled: !loaded.value || !hdmiWritable.value, loading: busy.value === 'apply', onClick: applyHdmi }, { default: () => t('apply') }),
         ]),
@@ -726,12 +744,6 @@
         h('div', { class: 'edid-toolbar' }, [
           h(NButton, { onClick: openImport }, { default: () => t('importFile') }),
         ]),
-        row(t('fileName'), h(NInput, {
-          value: fileName.value,
-          placeholder: t('filePlaceholder'),
-          maxlength: 72,
-          'onUpdate:value': (value) => { fileName.value = String(value || '').trim() },
-        })),
         h('h3', t('identity')),
         row(t('manufacturerPreset'), h(NSelect, {
           value: manufacturerSelect.value,
@@ -783,8 +795,15 @@
             row(t('vblank'), h(NInputNumber, { value: timing.vblank, min: 4, max: 256, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vblank: value ?? timing.vblank }) })),
           ]),
         ])),
-        h('h3', t('hex')),
-        h(NInput, { type: 'textarea', value: hex.value, autosize: { minRows: 6, maxRows: 12 }, 'onUpdate:value': onHexInput }),
+        h('h3', t('hexViewer')),
+        loaded.value ? h('pre', { class: 'edid-hex' }, hexDump(hex.value)) : null,
+        h(NInput, { type: 'textarea', value: hex.value, autosize: { minRows: 4, maxRows: 8 }, 'onUpdate:value': onHexInput }),
+        row(t('fileName'), h(NInput, {
+          value: fileName.value,
+          placeholder: t('filePlaceholder'),
+          maxlength: 72,
+          'onUpdate:value': (value) => { fileName.value = String(value || '').trim() },
+        })),
         h('div', { class: 'edid-actions' }, [
           h(NButton, { type: 'primary', disabled: !loaded.value, loading: busy.value === 'save', onClick: saveCustom }, { default: () => t('save') }),
           h(NButton, { disabled: !canDelete.value, loading: busy.value === 'delete', onClick: deleteCustom }, { default: () => t('remove') }),
@@ -822,6 +841,7 @@
       .edid-props dd { margin: 0; }
       .edid-timing { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.08); }
       .edid-timing-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .edid-hex { margin: 0; padding: 12px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.55; white-space: pre; border-radius: 8px; background: rgba(127,127,127,0.12); }
       @media (max-width: 720px) {
         .edid-toolbar { grid-template-columns: 1fr; }
       }
