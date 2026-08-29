@@ -929,8 +929,8 @@
           ref: (el) => { importInput.value = el },
           onChange: importFile,
         }),
-        h(NAlert, { type: 'info', showIcon: false }, { default: () => t('importAlert') }),
         h('div', { class: 'edid-toolbar' }, [
+          h(NAlert, { type: 'info', showIcon: false, class: 'edid-import-alert' }, { default: () => t('importAlert') }),
           h(NButton, { onClick: openImport }, { default: () => t('importFile') }),
         ]),
         h('h3', t('identity')),
@@ -1029,7 +1029,8 @@
       .edid-editor h4 { margin: 4px 0 0; font-size: 13px; }
       .edid-editor p { margin: 0; }
       .edid-pane { display: grid; gap: 16px; padding-top: 8px; }
-      .edid-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .edid-toolbar { display: flex; gap: 12px; align-items: center; }
+      .edid-import-alert { flex: 1; min-width: 0; margin: 0; }
       .edid-row { display: grid; gap: 8px; }
       .edid-row > span { font-size: 13px; font-weight: 600; }
       .edid-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 14px; }
