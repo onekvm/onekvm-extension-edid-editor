@@ -1,7 +1,7 @@
 (() => {
   const runtime = window.OneKVMPluginUI.v1
   const { computed, defineComponent, h, onMounted, ref, watch } = runtime.vue
-  const { NAlert, NButton, NInput, NInputNumber, NSelect, NTabPane, NTabs, useMessage } = runtime.naive
+  const { NAlert, NButton, NInput, NInputNumber, NSelect, NTabPane, NTabs, useDialog, useMessage } = runtime.naive
   const t = runtime.i18n.createTranslator({
     default: {
       title: 'EDID files',
@@ -30,6 +30,14 @@
       vblank: 'V blank',
       hex: 'EDID hex',
       hexViewer: 'HEX viewer',
+      hexEditor: 'HEX editor',
+      customParams: 'Custom parameters',
+      importAlert: 'Import a *.edid.bin file into this editor. It is not saved until you click Save.',
+      imported: 'Imported into the editor. Save if you want to keep the file.',
+      hso: 'H sync start',
+      hsw: 'H sync width',
+      vso: 'V sync start',
+      vsw: 'V sync width',
       fileName: 'File name',
       filePlaceholder: 'my-display.edid.bin',
       save: 'Save custom file',
@@ -83,6 +91,14 @@
       vblank: '垂直消隐',
       hex: 'EDID 十六进制',
       hexViewer: 'HEX 查看器',
+      hexEditor: 'HEX 编辑器',
+      customParams: '自定义参数',
+      importAlert: '导入 *.edid.bin 到本页编辑器。点保存之前不会写盘。',
+      imported: '已导入编辑器。若要保留文件，请再保存。',
+      hso: '水平同步起点',
+      hsw: '水平同步宽度',
+      vso: '垂直同步起点',
+      vsw: '垂直同步宽度',
       fileName: '文件名',
       filePlaceholder: 'my-display.edid.bin',
       save: '保存自定义文件',
@@ -136,6 +152,14 @@
       vblank: '垂直消隱',
       hex: 'EDID 十六進位',
       hexViewer: 'HEX 檢視器',
+      hexEditor: 'HEX 編輯器',
+      customParams: '自訂參數',
+      importAlert: '匯入 *.edid.bin 到本頁編輯器。按儲存之前不會寫入磁碟。',
+      imported: '已匯入編輯器。若要保留檔案，請再儲存。',
+      hso: '水平同步起點',
+      hsw: '水平同步寬度',
+      vso: '垂直同步起點',
+      vsw: '垂直同步寬度',
       fileName: '檔名',
       filePlaceholder: 'my-display.edid.bin',
       save: '儲存自訂檔案',
@@ -466,6 +490,8 @@
       const timings = ref([cloneTiming(TEMPLATES[0], true)])
       const syncing = ref(false)
       const importInput = ref(null)
+      const dumpDraft = ref('')
+      const dialog = useDialog()
 
       const fileOptions = computed(() => [
         { label: t('hdmi'), value: 'hdmi:current' },
@@ -496,6 +522,7 @@
         pnpCustom.value = !PNP_PRESETS.some((item) => item.id === manufacturer.value)
         if (meta.kind === 'custom' && meta.id) fileName.value = fileLabel(meta.id)
         else if (meta.fileName) fileName.value = meta.fileName
+        dumpDraft.value = hexDump(hex.value)
         syncing.value = false
       }
 
@@ -504,6 +531,7 @@
         const data = rebuildEdid(bytesFromHex(hex.value), manufacturer.value, monitorName.value, timings.value)
         syncing.value = true
         hex.value = hexFromBytes(data)
+        dumpDraft.value = hexDump(hex.value)
         syncing.value = false
       }
 
@@ -575,7 +603,7 @@
         event.target.value = ''
         if (!file) return
         if (!file.name.toLowerCase().endsWith(SUFFIX)) {
-          error.value = t('invalidImport')
+          dialog.warning({ title: t('importFile'), content: t('invalidImport'), positiveText: 'OK' })
           return
         }
         const reader = new FileReader()
@@ -590,6 +618,7 @@
             })
             error.value = ''
             tab.value = 'edit'
+            message.success(t('imported'))
           } catch (reason) {
             error.value = reasonText(reason)
           }
@@ -597,10 +626,19 @@
         reader.readAsArrayBuffer(file)
       }
 
-      function onHexInput(value) {
-        hex.value = value
+      function parseHexDump(text) {
+        const pieces = []
+        for (const line of String(text || '').split('\n')) {
+          const body = line.split('|')[0].replace(/^\s*[0-9a-fA-F]{3,8}\s+/, '')
+          pieces.push(body)
+        }
+        return bytesFromHex(pieces.join(''))
+      }
+
+      function onHexDumpInput(value) {
+        dumpDraft.value = value
         if (syncing.value) return
-        const data = bytesFromHex(value)
+        const data = parseHexDump(value)
         if (!validEdid(data)) return
         applyBytes(data, { kind: loadedKind.value, id: loadedId.value, fileName: fileName.value })
       }
@@ -708,7 +746,19 @@
 
       const timingLabel = (timing) => `${timing.width}×${timing.height}@${timing.fps}${timing.preferred ? ` - ${t('preferred')}` : ''}`
 
-      const viewPane = () => [
+      const hexField = (editable) => h('div', { class: 'edid-hex-wrap' }, [
+        h('h3', editable ? t('hexEditor') : t('hexViewer')),
+        h(NInput, {
+          type: 'textarea',
+          value: dumpDraft.value,
+          readonly: !editable,
+          autosize: { minRows: 12, maxRows: 20 },
+          inputProps: { spellcheck: false, class: 'edid-hex-native' },
+          'onUpdate:value': editable ? onHexDumpInput : undefined,
+        }),
+      ])
+
+      const viewPane = () => h('div', { class: 'edid-pane' }, [
         h(NSelect, {
           value: selection.value,
           options: fileOptions.value,
@@ -725,15 +775,14 @@
           h('dt', t('size')), h('dd', `${(hex.value.length / 2) | 0} B`),
           h('dt', t('timings')), h('dd', timings.value.map(timingLabel).join(', ')),
         ]) : h('p', t('empty')),
-        h('h3', t('hexViewer')),
-        loaded.value ? h('pre', { class: 'edid-hex' }, hexDump(hex.value)) : h('p', t('empty')),
+        hexField(false),
         h('div', { class: 'edid-actions' }, [
           h(NButton, { type: 'primary', disabled: !loaded.value || !hdmiWritable.value, loading: busy.value === 'apply', onClick: applyHdmi }, { default: () => t('apply') }),
         ]),
         h('p', { class: 'edid-hint' }, t('applyHint')),
-      ]
+      ])
 
-      const editPane = () => [
+      const editPane = () => h('div', { class: 'edid-pane' }, [
         h('input', {
           type: 'file',
           accept: '.edid.bin,application/octet-stream',
@@ -741,6 +790,7 @@
           ref: (el) => { importInput.value = el },
           onChange: importFile,
         }),
+        h(NAlert, { type: 'info', showIcon: false }, { default: () => t('importAlert') }),
         h('div', { class: 'edid-toolbar' }, [
           h(NButton, { onClick: openImport }, { default: () => t('importFile') }),
         ]),
@@ -758,15 +808,16 @@
             rebuildFromFields()
           },
         })),
-        manufacturerSelect.value === PNP_CUSTOM ? row(t('manufacturerCustom'), h(NInput, {
+        row(t('manufacturerCustom'), h(NInput, {
           value: manufacturer.value,
           maxlength: 3,
           placeholder: 'OKV',
           'onUpdate:value': (value) => {
+            pnpCustom.value = true
             manufacturer.value = String(value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
             rebuildFromFields()
           },
-        })) : null,
+        })),
         h('p', { class: 'edid-hint' }, t('manufacturerHint')),
         row(t('name'), h(NInput, {
           value: monitorName.value,
@@ -790,14 +841,19 @@
             row(t('width'), h(NInputNumber, { value: timing.width, min: 640, max: 4096, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { width: value ?? timing.width }) })),
             row(t('height'), h(NInputNumber, { value: timing.height, min: 480, max: 2160, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { height: value ?? timing.height }) })),
             row(t('fps'), h(NInputNumber, { value: timing.fps, min: 24, max: 240, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { fps: value ?? timing.fps }) })),
+          ]),
+          h('h4', t('customParams')),
+          h('div', { class: 'edid-grid' }, [
             row(t('pixclk'), h(NInputNumber, { value: timing.pixclk, min: 2500, max: 60000, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { pixclk: value ?? timing.pixclk }) })),
             row(t('hblank'), h(NInputNumber, { value: timing.hblank, min: 16, max: 1024, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { hblank: value ?? timing.hblank }) })),
             row(t('vblank'), h(NInputNumber, { value: timing.vblank, min: 4, max: 256, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vblank: value ?? timing.vblank }) })),
+            row(t('hso'), h(NInputNumber, { value: timing.hso, min: 0, max: 1023, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { hso: value ?? timing.hso }) })),
+            row(t('hsw'), h(NInputNumber, { value: timing.hsw, min: 1, max: 1023, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { hsw: value ?? timing.hsw }) })),
+            row(t('vso'), h(NInputNumber, { value: timing.vso, min: 0, max: 63, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vso: value ?? timing.vso }) })),
+            row(t('vsw'), h(NInputNumber, { value: timing.vsw, min: 1, max: 63, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vsw: value ?? timing.vsw }) })),
           ]),
         ])),
-        h('h3', t('hexViewer')),
-        loaded.value ? h('pre', { class: 'edid-hex' }, hexDump(hex.value)) : null,
-        h(NInput, { type: 'textarea', value: hex.value, autosize: { minRows: 4, maxRows: 8 }, 'onUpdate:value': onHexInput }),
+        hexField(true),
         row(t('fileName'), h(NInput, {
           value: fileName.value,
           placeholder: t('filePlaceholder'),
@@ -808,7 +864,7 @@
           h(NButton, { type: 'primary', disabled: !loaded.value, loading: busy.value === 'save', onClick: saveCustom }, { default: () => t('save') }),
           h(NButton, { disabled: !canDelete.value, loading: busy.value === 'delete', onClick: deleteCustom }, { default: () => t('remove') }),
         ]),
-      ]
+      ])
 
       return () => h('section', { class: 'edid-editor' }, [
         h('h2', t('title')),
@@ -828,22 +884,29 @@
     apiVersion: 1,
     component: Page,
     styles: [`
-      .edid-editor { display: grid; gap: 12px; }
-      .edid-editor h2, .edid-editor h3, .edid-editor p { margin: 0; }
-      .edid-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-      .edid-row { display: grid; gap: 6px; }
+      .edid-editor { display: grid; gap: 16px; }
+      .edid-editor h2 { margin: 0; }
+      .edid-editor h3 { margin: 8px 0 0; }
+      .edid-editor h4 { margin: 4px 0 0; font-size: 13px; }
+      .edid-editor p { margin: 0; }
+      .edid-pane { display: grid; gap: 16px; padding-top: 8px; }
+      .edid-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .edid-row { display: grid; gap: 8px; }
       .edid-row > span { font-size: 13px; font-weight: 600; }
-      .edid-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
-      .edid-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .edid-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 14px; }
+      .edid-actions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 4px; }
       .edid-hint { opacity: 0.78; font-size: 13px; }
-      .edid-props { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; }
+      .edid-props { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
       .edid-props dt { font-weight: 600; }
       .edid-props dd { margin: 0; }
-      .edid-timing { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+      .edid-timing { display: grid; gap: 12px; padding: 14px; border: 1px solid rgba(127,127,127,0.28); border-radius: 10px; }
       .edid-timing-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-      .edid-hex { margin: 0; padding: 12px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.55; white-space: pre; border-radius: 8px; background: rgba(127,127,127,0.12); }
-      @media (max-width: 720px) {
-        .edid-toolbar { grid-template-columns: 1fr; }
+      .edid-hex-wrap { display: grid; gap: 10px; }
+      .edid-hex-wrap textarea, .edid-hex-native {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+        font-size: 12px !important;
+        line-height: 1.55 !important;
+        white-space: pre;
       }
     `],
   })
