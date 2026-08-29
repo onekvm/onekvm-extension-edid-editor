@@ -4,7 +4,7 @@ CFLAGS += -std=c17 -Wall -Wextra -Wpedantic -Werror -ffunction-sections -fdata-s
 LDFLAGS += -Wl,--gc-sections
 PREFIX ?= /usr/local
 DESTDIR ?=
-VERSION ?= 0.1.6
+VERSION ?= 0.1.7
 ARCH ?= unknown
 
 .PHONY: all clean install

@@ -31,6 +31,7 @@
       hex: 'EDID hex',
       hexViewer: 'HEX viewer',
       hexEditor: 'HEX editor',
+      hexHint: 'Click a byte, then type 0-9 or A-F. Digits overwrite in place.',
       customParams: 'Custom parameters',
       importAlert: 'Import a *.edid.bin file into this editor. It is not saved until you click Save.',
       imported: 'Imported into the editor. Save if you want to keep the file.',
@@ -92,6 +93,7 @@
       hex: 'EDID 十六进制',
       hexViewer: 'HEX 查看器',
       hexEditor: 'HEX 编辑器',
+      hexHint: '点击字节，再输入 0-9 或 A-F。按位覆盖，不会插入。',
       customParams: '自定义参数',
       importAlert: '导入 *.edid.bin 到本页编辑器。点保存之前不会写盘。',
       imported: '已导入编辑器。若要保留文件，请再保存。',
@@ -153,6 +155,7 @@
       hex: 'EDID 十六進位',
       hexViewer: 'HEX 檢視器',
       hexEditor: 'HEX 編輯器',
+      hexHint: '點一下位元組，再輸入 0-9 或 A-F。就地覆蓋，不會插入。',
       customParams: '自訂參數',
       importAlert: '匯入 *.edid.bin 到本頁編輯器。按儲存之前不會寫入磁碟。',
       imported: '已匯入編輯器。若要保留檔案，請再儲存。',
@@ -490,7 +493,8 @@
       const timings = ref([cloneTiming(TEMPLATES[0], true)])
       const syncing = ref(false)
       const importInput = ref(null)
-      const dumpDraft = ref('')
+      const hexGridEl = ref(null)
+      const hexCursor = ref({ index: 0, nibble: 0 })
       const dialog = useDialog()
 
       const fileOptions = computed(() => [
@@ -522,7 +526,7 @@
         pnpCustom.value = !PNP_PRESETS.some((item) => item.id === manufacturer.value)
         if (meta.kind === 'custom' && meta.id) fileName.value = fileLabel(meta.id)
         else if (meta.fileName) fileName.value = meta.fileName
-        dumpDraft.value = hexDump(hex.value)
+        if (hexCursor.value.index >= data.length) hexCursor.value = { index: Math.max(0, data.length - 1), nibble: 0 }
         syncing.value = false
       }
 
@@ -531,7 +535,6 @@
         const data = rebuildEdid(bytesFromHex(hex.value), manufacturer.value, monitorName.value, timings.value)
         syncing.value = true
         hex.value = hexFromBytes(data)
-        dumpDraft.value = hexDump(hex.value)
         syncing.value = false
       }
 
@@ -626,23 +629,6 @@
         reader.readAsArrayBuffer(file)
       }
 
-      function parseHexDump(text) {
-        const pieces = []
-        for (const line of String(text || '').split('\n')) {
-          const body = line.split('|')[0].replace(/^\s*[0-9a-fA-F]{3,8}\s+/, '')
-          pieces.push(body)
-        }
-        return bytesFromHex(pieces.join(''))
-      }
-
-      function onHexDumpInput(value) {
-        dumpDraft.value = value
-        if (syncing.value) return
-        const data = parseHexDump(value)
-        if (!validEdid(data)) return
-        applyBytes(data, { kind: loadedKind.value, id: loadedId.value, fileName: fileName.value })
-      }
-
       async function saveCustom() {
         if (!isValidFileId(fileName.value)) {
           error.value = t('invalidName')
@@ -731,32 +717,116 @@
       })
 
       const row = (label, control) => h('label', { class: 'edid-row' }, [h('span', label), control])
-      function hexDump(value) {
-        const data = bytesFromHex(value)
-        if (!data) return ''
-        const lines = []
-        for (let offset = 0; offset < data.length; offset += 16) {
-          const slice = data.subarray(offset, offset + 16)
-          const bytes = Array.from(slice, (byte) => byte.toString(16).padStart(2, '0'))
-          const ascii = Array.from(slice, (byte) => (byte >= 32 && byte < 127 ? String.fromCharCode(byte) : '.')).join('')
-          lines.push(`${offset.toString(16).padStart(4, '0')}  ${bytes.slice(0, 8).join(' ').padEnd(23)} ${bytes.slice(8).join(' ').padEnd(23)}  |${ascii.padEnd(16)}|`)
-        }
-        return lines.join('\n')
-      }
-
       const timingLabel = (timing) => `${timing.width}×${timing.height}@${timing.fps}${timing.preferred ? ` - ${t('preferred')}` : ''}`
 
-      const hexField = (editable) => h('div', { class: 'edid-hex-wrap' }, [
-        h('h3', editable ? t('hexEditor') : t('hexViewer')),
-        h(NInput, {
-          type: 'textarea',
-          value: dumpDraft.value,
-          readonly: !editable,
-          autosize: { minRows: 12, maxRows: 20 },
-          inputProps: { spellcheck: false, class: 'edid-hex-native' },
-          'onUpdate:value': editable ? onHexDumpInput : undefined,
-        }),
-      ])
+      function currentBytes() {
+        return bytesFromHex(hex.value) || new Uint8Array(0)
+      }
+
+      function moveCursor(index, nibble) {
+        const data = currentBytes()
+        if (!data.length) {
+          hexCursor.value = { index: 0, nibble: 0 }
+          return
+        }
+        const next = Math.max(0, Math.min(data.length - 1, index))
+        hexCursor.value = { index: next, nibble: nibble ? 1 : 0 }
+      }
+
+      function writeNibble(digit) {
+        const value = parseInt(digit, 16)
+        if (Number.isNaN(value)) return
+        const data = Uint8Array.from(currentBytes())
+        if (!data.length) return
+        const cursor = hexCursor.value
+        const index = Math.max(0, Math.min(data.length - 1, cursor.index))
+        data[index] = cursor.nibble === 0
+          ? ((value << 4) | (data[index] & 0x0f))
+          : ((data[index] & 0xf0) | value)
+        fixChecksums(data)
+        if (!validEdid(data)) return
+        applyBytes(data, { kind: loadedKind.value, id: loadedId.value, fileName: fileName.value })
+        if (cursor.nibble === 0) moveCursor(index, 1)
+        else moveCursor(index + 1, 0)
+      }
+
+      function onHexKey(event) {
+        const data = currentBytes()
+        if (!data.length) return
+        const cursor = hexCursor.value
+        if (/^[0-9a-fA-F]$/.test(event.key)) {
+          event.preventDefault()
+          writeNibble(event.key)
+          return
+        }
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault()
+          if (cursor.nibble === 1) moveCursor(cursor.index, 0)
+          else moveCursor(cursor.index - 1, 1)
+        } else if (event.key === 'ArrowRight') {
+          event.preventDefault()
+          if (cursor.nibble === 0) moveCursor(cursor.index, 1)
+          else moveCursor(cursor.index + 1, 0)
+        } else if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          moveCursor(cursor.index - 16, cursor.nibble)
+        } else if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          moveCursor(cursor.index + 16, cursor.nibble)
+        } else if (event.key === 'Backspace') {
+          event.preventDefault()
+          if (cursor.nibble === 1) moveCursor(cursor.index, 0)
+          else moveCursor(cursor.index - 1, 1)
+        }
+      }
+
+      function selectByte(index) {
+        moveCursor(index, 0)
+        hexGridEl.value?.focus()
+      }
+
+      const hexField = (editable) => {
+        const data = currentBytes()
+        const rows = []
+        for (let offset = 0; offset < data.length; offset += 16) {
+          const cells = []
+          let ascii = ''
+          for (let col = 0; col < 16; col++) {
+            const index = offset + col
+            if (index >= data.length) {
+              cells.push(h('span', { class: 'edid-hex-byte is-empty' }, '  '))
+              ascii += ' '
+              continue
+            }
+            const selected = editable && hexCursor.value.index === index
+            ascii += data[index] >= 32 && data[index] < 127 ? String.fromCharCode(data[index]) : '.'
+            const text = data[index].toString(16).padStart(2, '0')
+            cells.push(h('button', {
+              type: 'button',
+              class: ['edid-hex-byte', selected ? 'is-selected' : '', col === 8 ? 'is-gap' : ''].filter(Boolean).join(' '),
+              onClick: () => { if (editable) selectByte(index) },
+            }, [
+              h('span', { class: selected && hexCursor.value.nibble === 0 ? 'is-nib' : '' }, text[0]),
+              h('span', { class: selected && hexCursor.value.nibble === 1 ? 'is-nib' : '' }, text[1]),
+            ]))
+          }
+          rows.push(h('div', { class: 'edid-hex-row' }, [
+            h('span', { class: 'edid-hex-off' }, offset.toString(16).padStart(4, '0')),
+            h('div', { class: 'edid-hex-bytes' }, cells),
+            h('span', { class: 'edid-hex-ascii' }, ascii),
+          ]))
+        }
+        return h('div', { class: 'edid-hex-wrap' }, [
+          h('h3', editable ? t('hexEditor') : t('hexViewer')),
+          h('p', { class: 'edid-hint' }, editable ? t('hexHint') : null),
+          h('div', {
+            class: ['edid-hex-grid', editable ? 'is-edit' : 'is-view'].join(' '),
+            tabindex: editable ? 0 : -1,
+            ref: editable ? (el) => { hexGridEl.value = el } : undefined,
+            onKeydown: editable ? onHexKey : undefined,
+          }, rows.length ? rows : [h('p', t('empty'))]),
+        ])
+      }
 
       const viewPane = () => h('div', { class: 'edid-pane' }, [
         h(NSelect, {
@@ -775,7 +845,7 @@
           h('dt', t('size')), h('dd', `${(hex.value.length / 2) | 0} B`),
           h('dt', t('timings')), h('dd', timings.value.map(timingLabel).join(', ')),
         ]) : h('p', t('empty')),
-        hexField(false),
+        hexField(true),
         h('div', { class: 'edid-actions' }, [
           h(NButton, { type: 'primary', disabled: !loaded.value || !hdmiWritable.value, loading: busy.value === 'apply', onClick: applyHdmi }, { default: () => t('apply') }),
         ]),
@@ -902,12 +972,36 @@
       .edid-timing { display: grid; gap: 12px; padding: 14px; border: 1px solid rgba(127,127,127,0.28); border-radius: 10px; }
       .edid-timing-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
       .edid-hex-wrap { display: grid; gap: 10px; }
-      .edid-hex-wrap textarea, .edid-hex-native {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
-        font-size: 12px !important;
-        line-height: 1.55 !important;
-        white-space: pre;
+      .edid-hex-grid {
+        outline: none;
+        padding: 12px;
+        overflow: auto;
+        border-radius: 10px;
+        background: rgba(127,127,127,0.12);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.5;
       }
+      .edid-hex-grid.is-edit:focus { box-shadow: inset 0 0 0 1px rgba(24,160,88,0.7); }
+      .edid-hex-row { display: grid; grid-template-columns: 3.2em minmax(18em, 1fr) 12em; gap: 10px; align-items: center; }
+      .edid-hex-off { opacity: 0.55; }
+      .edid-hex-bytes { display: grid; grid-template-columns: repeat(16, 1.7em); column-gap: 4px; }
+      .edid-hex-byte {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: center;
+        cursor: default;
+      }
+      .edid-hex-grid.is-edit .edid-hex-byte { cursor: text; }
+      .edid-hex-byte.is-gap { margin-left: 6px; }
+      .edid-hex-byte.is-selected { background: #18a058; color: #fff; }
+      .edid-hex-byte .is-nib { text-decoration: underline; }
+      .edid-hex-ascii { opacity: 0.7; letter-spacing: 0.04em; }
     `],
   })
 })()
