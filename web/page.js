@@ -20,6 +20,7 @@
       timings: 'Declared timings',
       preferred: 'Preferred',
       addTiming: 'Add timing',
+      addCustomTiming: 'Add custom timing',
       removeTiming: 'Remove',
       template: 'Add from template',
       width: 'Width',
@@ -82,6 +83,7 @@
       timings: '声明的时序',
       preferred: '首选',
       addTiming: '添加时序',
+      addCustomTiming: '添加自定义时序',
       removeTiming: '删除',
       template: '从模板添加',
       width: '宽度',
@@ -144,6 +146,7 @@
       timings: '宣告的時序',
       preferred: '首選',
       addTiming: '新增時序',
+      addCustomTiming: '新增自訂時序',
       removeTiming: '刪除',
       template: '從範本新增',
       width: '寬度',
@@ -227,11 +230,48 @@
   }
   const TEMPLATES = [
     { id: '1080p60', label: '1920×1080 @ 60', width: 1920, height: 1080, fps: 60, pixclk: 14850, hblank: 280, vblank: 45, hso: 88, hsw: 44, vso: 4, vsw: 5 },
-    { id: '1440p30', label: '2560×1440 @ 30', width: 2560, height: 1440, fps: 30, pixclk: 14625, hblank: 160, vblank: 37, hso: 48, hsw: 32, vso: 3, vsw: 5 },
+    { id: '1440p30', label: '2560×1440 @ 30', width: 2560, height: 1440, fps: 30, pixclk: 12036, hblank: 160, vblank: 35, hso: 48, hsw: 32, vso: 3, vsw: 5 },
+    { id: '720p90', label: '1280×720 @ 90', width: 1280, height: 720, fps: 90, pixclk: 11286, hblank: 370, vblank: 40, hso: 110, hsw: 40, vso: 5, vsw: 5 },
     { id: '720p120', label: '1280×720 @ 120', width: 1280, height: 720, fps: 120, pixclk: 14850, hblank: 370, vblank: 30, hso: 110, hsw: 40, vso: 5, vsw: 5 },
     { id: '1080p30', label: '1920×1080 @ 30', width: 1920, height: 1080, fps: 30, pixclk: 7425, hblank: 280, vblank: 45, hso: 88, hsw: 44, vso: 4, vsw: 5 },
     { id: '720p60', label: '1280×720 @ 60', width: 1280, height: 720, fps: 60, pixclk: 7425, hblank: 370, vblank: 30, hso: 110, hsw: 40, vso: 5, vsw: 5 },
   ]
+
+  function clampInt(value, min, max, fallback) {
+    const n = value | 0
+    if (!Number.isFinite(n)) return fallback
+    if (n < min) return min
+    if (n > max) return max
+    return n
+  }
+
+  function timingFromMode(width, height, fps) {
+    const mode = {
+      width: clampInt(width, 640, 4096, 1920),
+      height: clampInt(height, 480, 2160, 1080),
+      fps: clampInt(fps, 24, 240, 60),
+    }
+    const known = TEMPLATES.find((item) => item.width === mode.width && item.height === mode.height && item.fps === mode.fps)
+    if (known) return { width: known.width, height: known.height, fps: known.fps, pixclk: known.pixclk, hblank: known.hblank, vblank: known.vblank, hso: known.hso, hsw: known.hsw, vso: known.vso, vsw: known.vsw }
+    const hblank = 160
+    const hso = 48
+    const hsw = 32
+    const vso = 3
+    const vsw = 5
+    const htotal = mode.width + hblank
+    for (let vblank = 25; vblank <= 120; vblank++) {
+      const vtotal = mode.height + vblank
+      const product = mode.fps * htotal * vtotal
+      if (product % 10000 !== 0) continue
+      const pixclk = product / 10000
+      if (pixclk < 2500 || pixclk > 60000) continue
+      if (((pixclk * 10000) / (htotal * vtotal) | 0) !== mode.fps) continue
+      return { ...mode, pixclk, hblank, vblank, hso, hsw, vso, vsw }
+    }
+    const vblank = 37
+    const pixclk = clampInt(Math.round(mode.fps * htotal * (mode.height + vblank) / 10000), 2500, 60000, 14850)
+    return { ...mode, pixclk, hblank, vblank, hso, hsw, vso, vsw }
+  }
   const VICS = [
     { vic: 4, width: 1280, height: 720, fps: 60 },
     { vic: 16, width: 1920, height: 1080, fps: 60 },
@@ -541,7 +581,14 @@
       }
 
       function updateTiming(index, patch) {
-        timings.value = timings.value.map((item, current) => current === index ? { ...item, ...patch } : item)
+        timings.value = timings.value.map((item, current) => {
+          if (current !== index) return item
+          const next = { ...item, ...patch }
+          if (patch.width != null || patch.height != null || patch.fps != null) {
+            return { ...item, ...timingFromMode(next.width, next.height, next.fps), preferred: item.preferred }
+          }
+          return next
+        })
         rebuildFromFields()
       }
 
@@ -553,6 +600,15 @@
       function addTiming(id) {
         const template = TEMPLATES.find((item) => item.id === id) || TEMPLATES[0]
         timings.value = [...timings.value, cloneTiming(template, timings.value.length === 0)]
+        rebuildFromFields()
+      }
+
+      function addCustomTiming() {
+        const last = timings.value[timings.value.length - 1]
+        const timing = last
+          ? timingFromMode(last.width, last.height, last.fps)
+          : timingFromMode(1920, 1080, 60)
+        timings.value = [...timings.value, cloneTiming(timing, timings.value.length === 0)]
         rebuildFromFields()
       }
 
@@ -966,12 +1022,17 @@
           'onUpdate:value': (value) => { monitorName.value = value; rebuildFromFields() },
         })),
         h('h3', t('timings')),
-        row(t('template'), h(NSelect, {
-          value: null,
-          options: templateOptions,
-          placeholder: t('addTiming'),
-          'onUpdate:value': (value) => { if (value) addTiming(value) },
-        })),
+        h('div', { class: 'edid-timing-add' }, [
+          h('div', { class: 'edid-timing-add-select' }, [
+            h(NSelect, {
+              value: null,
+              options: templateOptions,
+              placeholder: t('template'),
+              'onUpdate:value': (value) => { if (value) addTiming(value) },
+            }),
+          ]),
+          h(NButton, { class: 'edid-timing-add-btn', onClick: addCustomTiming }, { default: () => t('addCustomTiming') }),
+        ]),
         ...timings.value.map((timing, index) => h('div', { class: 'edid-timing' }, [
           h('div', { class: 'edid-timing-head' }, [
             h('strong', timingLabel(timing)),
@@ -1045,6 +1106,9 @@
       .edid-props dd { margin: 0; }
       .edid-timing { display: grid; gap: 12px; padding: 14px; border: 1px solid rgba(127,127,127,0.28); border-radius: 10px; }
       .edid-timing-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .edid-timing-add { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 12px; align-items: center; }
+      .edid-timing-add-select { flex: 1 1 auto; min-width: 0; }
+      .edid-timing-add-btn { flex: 0 0 auto; white-space: nowrap; }
       .edid-hex-wrap { display: grid; gap: 10px; }
       .edid-hex-grid {
         outline: none;
