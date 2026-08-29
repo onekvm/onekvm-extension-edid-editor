@@ -1,11 +1,11 @@
 (() => {
   const runtime = window.OneKVMPluginUI.v1
-  const { computed, defineComponent, h, onMounted, ref } = runtime.vue
+  const { computed, defineComponent, h, onMounted, ref, watch } = runtime.vue
   const { NAlert, NButton, NInput, NInputNumber, NSelect, NTabPane, NTabs, useMessage } = runtime.naive
   const t = runtime.i18n.createTranslator({
     default: {
       title: 'EDID files',
-      description: 'Presets live in the package. Custom files live in plugin data. Import only fills the editor.',
+      description: 'Edit custom EDID files. Machine presets are applied in Display settings, not here.',
       tabView: 'View',
       tabEdit: 'Edit',
       load: 'Load',
@@ -29,18 +29,17 @@
       hblank: 'H blank',
       vblank: 'V blank',
       hex: 'Raw EDID hex',
-      filePath: 'File path',
-      savePath: 'Save path (plugin data)',
-      pathPlaceholder: 'edid/my-display.edid.bin',
+      fileName: 'File name',
+      filePlaceholder: 'my-display.edid.bin',
       save: 'Save custom file',
       remove: 'Delete custom file',
       apply: 'Apply to HDMI',
       applyHint: 'Writes the current EDID through Core to the capture chip.',
       empty: 'No EDID loaded yet.',
-      invalidPath: 'Save path must look like edid/name.edid.bin and cannot be a preset path.',
+      invalidName: 'Use a file name like my-display.edid.bin.',
       invalidEdid: 'EDID blob is invalid.',
       invalidImport: 'Import a file named *.edid.bin. It is only loaded into this page.',
-      presetReadOnly: 'Preset files are in the package and cannot be overwritten. Save to a custom path instead.',
+      presetReadOnly: 'Machine presets cannot be overwritten here. Save a custom file name instead.',
       saved: 'Custom EDID file saved.',
       deleted: 'Custom EDID file deleted.',
       applied: 'Core applied the EDID to the capture chip.',
@@ -58,7 +57,7 @@
     },
     zh: {
       title: 'EDID 文件',
-      description: '预设在软件包目录，自定义文件在插件数据目录。导入只进入本页编辑器，不会写盘。',
+      description: '编辑自定义 EDID 文件。机型预设请在显示设置里应用，不会出现在本页。',
       tabView: '查看',
       tabEdit: '编辑',
       load: '打开',
@@ -82,18 +81,17 @@
       hblank: '水平消隐',
       vblank: '垂直消隐',
       hex: '原始 EDID 十六进制',
-      filePath: '文件路径',
-      savePath: '保存路径（插件数据）',
-      pathPlaceholder: 'edid/my-display.edid.bin',
+      fileName: '文件名',
+      filePlaceholder: 'my-display.edid.bin',
       save: '保存自定义文件',
       remove: '删除自定义文件',
       apply: '应用到 HDMI',
       applyHint: '把当前 EDID 通过 Core 写入采集芯片。',
       empty: '尚未载入 EDID。',
-      invalidPath: '保存路径必须是 edid/名称.edid.bin，且不能是预设路径。',
+      invalidName: '文件名形如 my-display.edid.bin。',
       invalidEdid: 'EDID 内容无效。',
       invalidImport: '请导入名为 *.edid.bin 的文件。导入只进入本页，不会保存。',
-      presetReadOnly: '预设文件在软件包里，不能覆盖。请保存到自定义路径。',
+      presetReadOnly: '机型预设不能在这里覆盖。请另存为自定义文件名。',
       saved: '已保存自定义 EDID 文件。',
       deleted: '已删除自定义 EDID 文件。',
       applied: 'Core 已把 EDID 应用到采集芯片。',
@@ -111,7 +109,7 @@
     },
     'zh-TW': {
       title: 'EDID 檔案',
-      description: '預設在套件目錄，自訂檔案在外掛資料目錄。匯入只進入本頁編輯器，不會寫入磁碟。',
+      description: '編輯自訂 EDID 檔案。機型預設請在顯示設定裡套用，不會出現在本頁。',
       tabView: '檢視',
       tabEdit: '編輯',
       load: '開啟',
@@ -135,18 +133,17 @@
       hblank: '水平消隱',
       vblank: '垂直消隱',
       hex: '原始 EDID 十六進位',
-      filePath: '檔案路徑',
-      savePath: '儲存路徑（外掛資料）',
-      pathPlaceholder: 'edid/my-display.edid.bin',
+      fileName: '檔名',
+      filePlaceholder: 'my-display.edid.bin',
       save: '儲存自訂檔案',
       remove: '刪除自訂檔案',
       apply: '套用到 HDMI',
       applyHint: '把目前 EDID 透過 Core 寫入擷取晶片。',
       empty: '尚未載入 EDID。',
-      invalidPath: '儲存路徑必須是 edid/名稱.edid.bin，且不能是預設路徑。',
+      invalidName: '檔名形如 my-display.edid.bin。',
       invalidEdid: 'EDID 內容無效。',
       invalidImport: '請匯入名為 *.edid.bin 的檔案。匯入只進入本頁，不會儲存。',
-      presetReadOnly: '預設檔案在套件裡，不能覆蓋。請儲存到自訂路徑。',
+      presetReadOnly: '機型預設不能在這裡覆蓋。請另存為自訂檔名。',
       saved: '已儲存自訂 EDID 檔案。',
       deleted: '已刪除自訂 EDID 檔案。',
       applied: 'Core 已把 EDID 套用到擷取晶片。',
@@ -414,23 +411,21 @@
     return data
   }
 
-  function idFromPath(path) {
-    const name = String(path || '').trim().split('/').pop() || ''
-    if (name.toLowerCase().endsWith(SUFFIX)) return name.slice(0, -SUFFIX.length)
-    return ''
+  function fileIdFromName(value) {
+    let name = String(value || '').trim().split('/').pop() || ''
+    const lower = name.toLowerCase()
+    if (lower.endsWith(SUFFIX)) return name.slice(0, -SUFFIX.length)
+    if (lower.endsWith('.bin')) return name.slice(0, -4)
+    return name
   }
 
-  function customPath(id) {
-    return `edid/${id}${SUFFIX}`
+  function fileLabel(id) {
+    return id ? `${id}${SUFFIX}` : ''
   }
 
-  function isPresetPath(path) {
-    return String(path || '').startsWith('share/edid/')
-  }
-
-  function isCustomPath(path) {
-    const value = String(path || '').trim()
-    return value.startsWith('edid/') && value.endsWith(SUFFIX) && ID_PATTERN.test(idFromPath(value)) && !value.includes('..')
+  function isValidFileId(value) {
+    const id = fileIdFromName(value)
+    return ID_PATTERN.test(id) && !id.includes('/')
   }
 
   function reasonText(reason) {
@@ -454,14 +449,14 @@
       const tab = ref('view')
       const error = ref('')
       const busy = ref('')
-      const presets = ref([])
       const custom = ref([])
       const selection = ref('hdmi:current')
       const hdmiHex = ref('')
       const hdmiWritable = ref(false)
-      const loadedPath = ref('')
-      const savePath = ref('')
-      const sourceLabel = ref('')
+      const loadedKind = ref('')
+      const loadedId = ref('')
+      const fileName = ref('')
+      const pnpCustom = ref(false)
       const hex = ref('')
       const manufacturer = ref('OKV')
       const monitorName = ref('OneKVM 1080p')
@@ -470,29 +465,20 @@
       const importInput = ref(null)
 
       const fileOptions = computed(() => [
-        { type: 'group', label: t('groupHdmi'), key: 'hdmi', children: [{ label: t('hdmi'), value: 'hdmi:current' }] },
-        {
-          type: 'group',
-          label: t('presets'),
-          key: 'presets',
-          children: presets.value.map((file) => ({ label: `${file.id} · ${file.path || customPath(file.id).replace('edid/', 'share/edid/')}`, value: `preset:${file.id}` })),
-        },
-        {
-          type: 'group',
-          label: t('custom'),
-          key: 'custom',
-          children: custom.value.map((file) => ({ label: `${file.id} · ${file.path || customPath(file.id)}`, value: `custom:${file.id}` })),
-        },
+        { label: t('hdmi'), value: 'hdmi:current' },
+        ...custom.value.map((file) => ({ label: fileLabel(file.id), value: `custom:${file.id}` })),
       ])
       const templateOptions = TEMPLATES.map((item) => ({ label: item.label, value: item.id }))
       const loaded = computed(() => validEdid(bytesFromHex(hex.value)))
-      const canDelete = computed(() => isCustomPath(loadedPath.value) && custom.value.some((file) => file.id === idFromPath(loadedPath.value)))
+      const canDelete = computed(() => loadedKind.value === 'custom' && custom.value.some((file) => file.id === loadedId.value))
       const pnpOptions = computed(() => [
         ...PNP_PRESETS.map((item) => ({ label: `${item.id} · ${item.name}`, value: item.id })),
         { label: t('customOption'), value: PNP_CUSTOM },
       ])
       const manufacturerSelect = computed(() => (
-        PNP_PRESETS.some((item) => item.id === manufacturer.value) ? manufacturer.value : PNP_CUSTOM
+        pnpCustom.value || !PNP_PRESETS.some((item) => item.id === manufacturer.value)
+          ? PNP_CUSTOM
+          : manufacturer.value
       ))
 
       function applyBytes(data, meta) {
@@ -502,11 +488,11 @@
         monitorName.value = monitorNameOf(data) || 'OneKVM'
         timings.value = parseTimings(data)
         hex.value = hexFromBytes(data)
-        loadedPath.value = meta.path || ''
-        sourceLabel.value = meta.source || ''
-        if (meta.savePath !== undefined) savePath.value = meta.savePath
-        else if (isCustomPath(meta.path)) savePath.value = meta.path
-        else if (meta.id) savePath.value = customPath(meta.id)
+        loadedKind.value = meta.kind || ''
+        loadedId.value = meta.id || ''
+        pnpCustom.value = !PNP_PRESETS.some((item) => item.id === manufacturer.value)
+        if (meta.kind === 'custom' && meta.id) fileName.value = fileLabel(meta.id)
+        else if (meta.fileName) fileName.value = meta.fileName
         syncing.value = false
       }
 
@@ -544,7 +530,6 @@
 
       async function reloadCatalog() {
         const listed = await props.host.invoke('list', {})
-        presets.value = listed?.presets || []
         custom.value = listed?.custom || []
         const response = await fetch('/api/video/edid', { credentials: 'same-origin' })
         if (!response.ok) {
@@ -564,16 +549,13 @@
           if (selection.value === 'hdmi:current') {
             const data = bytesFromHex(hdmiHex.value)
             if (!data) throw new Error(t('noHdmi'))
-            applyBytes(data, { source: t('hdmi'), path: '', savePath: savePath.value || '', id: 'hdmi' })
+            applyBytes(data, { kind: 'hdmi', id: '' })
             return
           }
           const [source, id] = selection.value.split(':')
+          if (source !== 'custom' || !id) return
           const body = await props.host.invoke('read', { source, id })
-          applyBytes(bytesFromHex(body.data_hex), {
-            source: source === 'preset' ? t('presets') : t('custom'),
-            path: body.path || (source === 'preset' ? `share/edid/${id}${SUFFIX}` : customPath(id)),
-            id,
-          })
+          applyBytes(bytesFromHex(body.data_hex), { kind: 'custom', id: body.id || id })
         } catch (reason) {
           error.value = reasonText(reason)
         } finally {
@@ -597,11 +579,11 @@
         reader.onload = () => {
           try {
             const data = new Uint8Array(reader.result)
-            const id = idFromPath(file.name.toLowerCase())
+            const id = fileIdFromName(file.name.toLowerCase())
             applyBytes(data, {
-              source: t('importedDraft'),
-              path: '',
-              savePath: ID_PATTERN.test(id) ? customPath(id) : savePath.value,
+              kind: 'draft',
+              id: '',
+              fileName: isValidFileId(id) ? fileLabel(id) : fileName.value,
             })
             error.value = ''
             tab.value = 'edit'
@@ -617,16 +599,12 @@
         if (syncing.value) return
         const data = bytesFromHex(value)
         if (!validEdid(data)) return
-        applyBytes(data, { source: sourceLabel.value, path: loadedPath.value, savePath: savePath.value })
+        applyBytes(data, { kind: loadedKind.value, id: loadedId.value, fileName: fileName.value })
       }
 
       async function saveCustom() {
-        if (isPresetPath(savePath.value) || isPresetPath(loadedPath.value) && !isCustomPath(savePath.value)) {
-          error.value = t('presetReadOnly')
-          return
-        }
-        if (!isCustomPath(savePath.value)) {
-          error.value = t('invalidPath')
+        if (!isValidFileId(fileName.value)) {
+          error.value = t('invalidName')
           return
         }
         const data = bytesFromHex(hex.value)
@@ -637,11 +615,12 @@
         busy.value = 'save'
         error.value = ''
         try {
-          const id = idFromPath(savePath.value)
+          const id = fileIdFromName(fileName.value)
           await props.host.invoke('save', { id, data_hex: hexFromBytes(data) })
           await reloadCatalog()
-          loadedPath.value = customPath(id)
-          sourceLabel.value = t('custom')
+          loadedKind.value = 'custom'
+          loadedId.value = id
+          fileName.value = fileLabel(id)
           selection.value = `custom:${id}`
           message.success(t('saved'))
         } catch (reason) {
@@ -656,9 +635,12 @@
         busy.value = 'delete'
         error.value = ''
         try {
-          await props.host.invoke('delete', { id: idFromPath(loadedPath.value) })
+          await props.host.invoke('delete', { id: loadedId.value })
           await reloadCatalog()
-          loadedPath.value = ''
+          loadedKind.value = ''
+          loadedId.value = ''
+          fileName.value = ''
+          selection.value = 'hdmi:current'
           message.success(t('deleted'))
         } catch (reason) {
           error.value = reasonText(reason)
@@ -697,14 +679,12 @@
         }
       }
 
+      watch(selection, () => {
+        loadSelection()
+      })
+
       onMounted(() => {
-        reloadCatalog().then(() => {
-          if (hdmiHex.value) return loadSelection()
-          const first = presets.value[0]
-          if (!first) return
-          selection.value = `preset:${first.id}`
-          return loadSelection()
-        }).catch((reason) => {
+        reloadCatalog().then(() => loadSelection()).catch((reason) => {
           error.value = reasonText(reason)
         })
       })
@@ -713,12 +693,16 @@
       const timingLabel = (timing) => `${timing.width}×${timing.height}@${timing.fps}${timing.preferred ? ` · ${t('preferred')}` : ''}`
 
       const viewPane = () => [
-        h('div', { class: 'edid-toolbar' }, [
-          h(NSelect, { value: selection.value, options: fileOptions.value, 'onUpdate:value': (value) => { selection.value = value } }),
-          h(NButton, { loading: busy.value === 'load', onClick: loadSelection }, { default: () => t('load') }),
-        ]),
-        row(t('filePath'), h(NInput, { value: loadedPath.value || t('hdmi'), readonly: true })),
-        row(t('source'), h('p', { class: 'edid-hint' }, sourceLabel.value || t('empty'))),
+        h(NSelect, {
+          value: selection.value,
+          options: fileOptions.value,
+          loading: busy.value === 'load',
+          'onUpdate:value': (value) => { selection.value = value },
+        }),
+        row(t('fileName'), h(NInput, {
+          value: loadedKind.value === 'custom' ? fileLabel(loadedId.value) : (loadedKind.value === 'hdmi' ? t('hdmi') : fileName.value),
+          readonly: true,
+        })),
         loaded.value ? h('dl', { class: 'edid-props' }, [
           h('dt', t('manufacturer')), h('dd', pnpLabel(manufacturer.value)),
           h('dt', t('name')), h('dd', monitorName.value),
@@ -741,30 +725,28 @@
         }),
         h('div', { class: 'edid-toolbar' }, [
           h(NButton, { onClick: openImport }, { default: () => t('importFile') }),
-          h('p', { class: 'edid-hint' }, t('invalidImport')),
         ]),
-        row(t('savePath'), h(NInput, {
-          value: savePath.value,
-          placeholder: t('pathPlaceholder'),
-          maxlength: 80,
-          'onUpdate:value': (value) => { savePath.value = String(value || '').trim() },
+        row(t('fileName'), h(NInput, {
+          value: fileName.value,
+          placeholder: t('filePlaceholder'),
+          maxlength: 72,
+          'onUpdate:value': (value) => { fileName.value = String(value || '').trim() },
         })),
-        isPresetPath(loadedPath.value) ? h(NAlert, { type: 'info', showIcon: false }, { default: () => t('presetReadOnly') }) : null,
         h('h3', t('identity')),
         row(t('manufacturerPreset'), h(NSelect, {
           value: manufacturerSelect.value,
           options: pnpOptions.value,
-          filterable: true,
           'onUpdate:value': (value) => {
-            if (!value || value === PNP_CUSTOM) {
-              if (PNP_PRESETS.some((item) => item.id === manufacturer.value)) manufacturer.value = ''
+            if (value === PNP_CUSTOM) {
+              pnpCustom.value = true
               return
             }
+            pnpCustom.value = false
             manufacturer.value = value
             rebuildFromFields()
           },
         })),
-        row(t('manufacturerCustom'), h(NInput, {
+        manufacturerSelect.value === PNP_CUSTOM ? row(t('manufacturerCustom'), h(NInput, {
           value: manufacturer.value,
           maxlength: 3,
           placeholder: 'OKV',
@@ -772,7 +754,7 @@
             manufacturer.value = String(value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
             rebuildFromFields()
           },
-        })),
+        })) : null,
         h('p', { class: 'edid-hint' }, t('manufacturerHint')),
         row(t('name'), h(NInput, {
           value: monitorName.value,
@@ -829,7 +811,7 @@
     styles: [`
       .edid-editor { display: grid; gap: 12px; }
       .edid-editor h2, .edid-editor h3, .edid-editor p { margin: 0; }
-      .edid-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+      .edid-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
       .edid-row { display: grid; gap: 6px; }
       .edid-row > span { font-size: 13px; font-weight: 600; }
       .edid-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
