@@ -10,7 +10,7 @@ SRCREV = "${ONEKVM_COMPONENT_SRCREV}"
 
 inherit onekvm-extension
 
-ONEKVM_EXTENSION_ID = "edid-editor"
+ONEKVM_EXTENSION_ID = "edid"
 ONEKVM_EXTENSION_API_VERSION = "2"
 
 RPROVIDES:${PN} += "onekvm-extension-edid"
