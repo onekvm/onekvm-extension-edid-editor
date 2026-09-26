@@ -1,6 +1,6 @@
 {
   "manifest_version": 1,
-  "id": "edid",
+  "id": "edid-editor",
   "i18n": {
     "default": {
       "name": "EDID Editor",
