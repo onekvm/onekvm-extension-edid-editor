@@ -1,17 +1,20 @@
 (() => {
   const runtime = window.OneKVMPluginUI.v1
   const { computed, defineComponent, h, onMounted, ref, watch } = runtime.vue
-  const { NAlert, NButton, NInput, NInputNumber, NSelect, NTabPane, NTabs, useDialog, useMessage } = runtime.naive
+  const { NAlert, NButton, NCollapse, NCollapseItem, NInput, NInputNumber, NSelect, NSpin, NTabPane, NTabs, useDialog, useMessage } = runtime.naive
   const t = runtime.i18n.createTranslator({
     default: {
       title: 'EDID files',
-      description: 'Edit custom EDID files. Machine presets are applied in Display settings, not here.',
+      description: 'View display identity and modes, or edit a preset and save a custom EDID.',
       tabView: 'View',
       tabEdit: 'Edit',
       load: 'Load',
       importFile: 'Import',
       identity: 'Identity',
-      manufacturer: 'PNP manufacturer ID',
+      manufacturer: 'Manufacturer',
+      manufacturerId: 'PNP ID',
+      manufacturerInvalid: 'Enter exactly three letters (A–Z).',
+      version: 'EDID version',
       manufacturerPreset: 'Vendor preset',
       manufacturerCustom: 'Custom ID',
       customOption: 'Custom…',
@@ -32,7 +35,7 @@
       hex: 'EDID hex',
       hexViewer: 'HEX viewer',
       hexEditor: 'HEX editor',
-      hexHint: 'Click a byte, then type 0-9 or A-F. Digits overwrite in place.',
+      hexHint: 'Click a byte, then type 0-9 or A-F. Drag or Shift-click to select a range. Digits overwrite in place.',
       customParams: 'Custom parameters',
       importAlert: 'Import a *.edid.bin file into this editor. It is not saved until you click Save.',
       imported: 'Imported into the editor. Save if you want to keep the file.',
@@ -45,7 +48,7 @@
       save: 'Save custom file',
       remove: 'Delete custom file',
       apply: 'Apply to HDMI',
-      applyHint: 'Writes the current EDID through Core to the capture chip.',
+      applyHint: 'Apply the current EDID to the HDMI input.',
       empty: 'No EDID loaded yet.',
       invalidName: 'Use a file name like my-display.edid.bin.',
       invalidEdid: 'EDID blob is invalid.',
@@ -58,8 +61,10 @@
       appliedReboot: 'Core wrote the EDID. Restart this device before the host sees it.',
       appliedPower: 'Core wrote the EDID. Power-cycle this device before the host sees it.',
       hdmi: 'Current HDMI',
-      presets: 'Presets (package)',
-      custom: 'Custom (plugin data)',
+      loadingHdmi: 'Reading current HDMI EDID…',
+      loadingFile: 'Loading EDID…',
+      presets: 'Built-in presets',
+      custom: 'Custom files',
       groupHdmi: 'HDMI',
       noHdmi: 'Current HDMI EDID is unavailable.',
       source: 'Source',
@@ -68,13 +73,16 @@
     },
     zh: {
       title: 'EDID 文件',
-      description: '编辑自定义 EDID 文件。机型预设请在显示设置里应用，不会出现在本页。',
+      description: '查看显示器信息和支持模式，或编辑预设后另存为自定义 EDID。',
       tabView: '查看',
       tabEdit: '编辑',
       load: '打开',
       importFile: '导入',
       identity: '标识',
-      manufacturer: 'PNP 厂商 ID',
+      manufacturer: '厂商',
+      manufacturerId: 'PNP 厂商 ID',
+      manufacturerInvalid: '请输入完整的 3 个 A–Z 字母。',
+      version: 'EDID 版本',
       manufacturerPreset: '厂商预设',
       manufacturerCustom: '自定义 ID',
       customOption: '自定义…',
@@ -95,7 +103,7 @@
       hex: 'EDID 十六进制',
       hexViewer: 'HEX 查看器',
       hexEditor: 'HEX 编辑器',
-      hexHint: '点击字节，再输入 0-9 或 A-F。按位覆盖，不会插入。',
+      hexHint: '点击字节，再输入 0-9 或 A-F。拖动或按住 Shift 点击可以框选。按位覆盖，不会插入。',
       customParams: '自定义参数',
       importAlert: '导入 *.edid.bin 到本页编辑器。点保存之前不会写盘。',
       imported: '已导入编辑器。若要保留文件，请再保存。',
@@ -108,7 +116,7 @@
       save: '保存自定义文件',
       remove: '删除自定义文件',
       apply: '应用到 HDMI',
-      applyHint: '把当前 EDID 通过 Core 写入采集芯片。',
+      applyHint: '将当前 EDID 应用到 HDMI 输入。',
       empty: '尚未载入 EDID。',
       invalidName: '文件名形如 my-display.edid.bin。',
       invalidEdid: 'EDID 内容无效。',
@@ -121,8 +129,10 @@
       appliedReboot: 'Core 已写入 EDID。重启本机后，被控主机才会看到新 EDID。',
       appliedPower: 'Core 已写入 EDID。给本机断电再上电后，被控主机才会看到新 EDID。',
       hdmi: '当前 HDMI',
-      presets: '预设（软件包）',
-      custom: '自定义（插件数据）',
+      loadingHdmi: '正在读取当前 HDMI EDID…',
+      loadingFile: '正在载入 EDID…',
+      presets: '内置预设',
+      custom: '自定义文件',
       groupHdmi: 'HDMI',
       noHdmi: '当前 HDMI EDID 不可用。',
       source: '来源',
@@ -131,13 +141,16 @@
     },
     'zh-TW': {
       title: 'EDID 檔案',
-      description: '編輯自訂 EDID 檔案。機型預設請在顯示設定裡套用，不會出現在本頁。',
+      description: '檢視顯示器資訊和支援模式，或編輯預設後另存為自訂 EDID。',
       tabView: '檢視',
       tabEdit: '編輯',
       load: '開啟',
       importFile: '匯入',
       identity: '識別',
-      manufacturer: 'PNP 廠商 ID',
+      manufacturer: '廠商',
+      manufacturerId: 'PNP 廠商 ID',
+      manufacturerInvalid: '請輸入完整的 3 個 A–Z 字母。',
+      version: 'EDID 版本',
       manufacturerPreset: '廠商預設',
       manufacturerCustom: '自訂 ID',
       customOption: '自訂…',
@@ -158,7 +171,7 @@
       hex: 'EDID 十六進位',
       hexViewer: 'HEX 檢視器',
       hexEditor: 'HEX 編輯器',
-      hexHint: '點一下位元組，再輸入 0-9 或 A-F。就地覆蓋，不會插入。',
+      hexHint: '點一下位元組，再輸入 0-9 或 A-F。拖曳或按住 Shift 點擊可以框選。就地覆蓋，不會插入。',
       customParams: '自訂參數',
       importAlert: '匯入 *.edid.bin 到本頁編輯器。按儲存之前不會寫入磁碟。',
       imported: '已匯入編輯器。若要保留檔案，請再儲存。',
@@ -171,7 +184,7 @@
       save: '儲存自訂檔案',
       remove: '刪除自訂檔案',
       apply: '套用到 HDMI',
-      applyHint: '把目前 EDID 透過 Core 寫入擷取晶片。',
+      applyHint: '將目前 EDID 套用至 HDMI 輸入。',
       empty: '尚未載入 EDID。',
       invalidName: '檔名形如 my-display.edid.bin。',
       invalidEdid: 'EDID 內容無效。',
@@ -184,8 +197,10 @@
       appliedReboot: 'Core 已寫入 EDID。重新啟動本機後，被控主機才會看到新 EDID。',
       appliedPower: 'Core 已寫入 EDID。為本機斷電再上電後，被控主機才會看到新 EDID。',
       hdmi: '目前 HDMI',
-      presets: '預設（套件）',
-      custom: '自訂（外掛資料）',
+      loadingHdmi: '正在讀取目前 HDMI EDID…',
+      loadingFile: '正在載入 EDID…',
+      presets: '內建預設',
+      custom: '自訂檔案',
       groupHdmi: 'HDMI',
       noHdmi: '目前 HDMI EDID 無法取得。',
       source: '來源',
@@ -226,9 +241,10 @@
   ]
   function pnpLabel(id) {
     const hit = PNP_PRESETS.find((item) => item.id === id)
-    return hit ? `${hit.id} - ${hit.name}` : id
+    return hit ? hit.name : /^[A-Z]{3}$/.test(id) ? id : '—'
   }
   const TEMPLATES = [
+    { id: '1620p30', label: '2880×1620 @ 30', width: 2880, height: 1620, fps: 30, pixclk: 15048, hblank: 160, vblank: 30, hso: 48, hsw: 32, vso: 3, vsw: 5 },
     { id: '1080p60', label: '1920×1080 @ 60', width: 1920, height: 1080, fps: 60, pixclk: 14850, hblank: 280, vblank: 45, hso: 88, hsw: 44, vso: 4, vsw: 5 },
     { id: '1440p30', label: '2560×1440 @ 30', width: 2560, height: 1440, fps: 30, pixclk: 12036, hblank: 160, vblank: 35, hso: 48, hsw: 32, vso: 3, vsw: 5 },
     { id: '720p90', label: '1280×720 @ 90', width: 1280, height: 720, fps: 90, pixclk: 11286, hblank: 370, vblank: 40, hso: 110, hsw: 40, vso: 5, vsw: 5 },
@@ -518,31 +534,45 @@
       const message = useMessage()
       const tab = ref('view')
       const error = ref('')
-      const busy = ref('')
+      const busy = ref('load')
+      const presets = ref([])
       const custom = ref([])
       const selection = ref('hdmi:current')
-      const hdmiHex = ref('')
       const hdmiWritable = ref(false)
       const loadedKind = ref('')
       const loadedId = ref('')
       const fileName = ref('')
       const pnpCustom = ref(false)
       const hex = ref('')
-      const manufacturer = ref('OKV')
-      const monitorName = ref('OneKVM 1080p')
+      const manufacturer = ref('')
+      const monitorName = ref('')
       const timings = ref([cloneTiming(TEMPLATES[0], true)])
       const syncing = ref(false)
       const importInput = ref(null)
       const hexGridEl = ref(null)
       const hexCursor = ref({ index: 0, nibble: 0, pane: 'hex' })
+      const hexAnchor = ref(0)
+      let hexDrag = null
+      const timingAdvanced = ref({})
       const dialog = useDialog()
+      let loadGeneration = 0
 
       const fileOptions = computed(() => [
         { label: t('hdmi'), value: 'hdmi:current' },
-        ...custom.value.map((file) => ({ label: fileLabel(file.id), value: `custom:${file.id}` })),
+        ...[
+          { source: 'preset', label: t('presets'), files: presets.value },
+          { source: 'custom', label: t('custom'), files: custom.value },
+        ].filter((group) => group.files.length).map((group) => ({
+          type: 'group',
+          key: group.source,
+          label: group.label,
+          children: group.files.map((file) => ({ label: fileLabel(file.id), value: `${group.source}:${file.id}` })),
+        })),
       ])
       const templateOptions = TEMPLATES.map((item) => ({ label: item.label, value: item.id }))
       const loaded = computed(() => validEdid(bytesFromHex(hex.value)))
+      const manufacturerValid = computed(() => /^[A-Z]{3}$/.test(manufacturer.value))
+      const loadedSource = computed(() => ({ hdmi: t('hdmi'), preset: t('presets'), custom: t('custom'), draft: t('importedDraft') })[loadedKind.value] || '—')
       const canDelete = computed(() => loadedKind.value === 'custom' && custom.value.some((file) => file.id === loadedId.value))
       const pnpOptions = computed(() => [
         ...PNP_PRESETS.map((item) => ({ label: `${item.id} - ${item.name}`, value: item.id })),
@@ -557,23 +587,26 @@
       function applyBytes(data, meta) {
         if (!validEdid(data)) throw new Error(t('invalidEdid'))
         syncing.value = true
-        manufacturer.value = manufacturerOf(data) || 'OKV'
-        monitorName.value = monitorNameOf(data) || 'OneKVM'
+        manufacturer.value = manufacturerOf(data)
+        monitorName.value = monitorNameOf(data)
         timings.value = parseTimings(data)
         hex.value = hexFromBytes(data)
         loadedKind.value = meta.kind || ''
         loadedId.value = meta.id || ''
         pnpCustom.value = !PNP_PRESETS.some((item) => item.id === manufacturer.value)
         if (meta.kind === 'custom' && meta.id) fileName.value = fileLabel(meta.id)
+        else if (meta.kind === 'preset' && meta.id) fileName.value = fileLabel(`${meta.id}-custom`)
         else if (meta.fileName) fileName.value = meta.fileName
-        if (hexCursor.value.index >= data.length) {
-          hexCursor.value = { index: Math.max(0, data.length - 1), nibble: 0, pane: hexCursor.value.pane || 'hex' }
+        const last = Math.max(0, data.length - 1)
+        if (hexCursor.value.index > last) {
+          hexCursor.value = { index: last, nibble: 0, pane: hexCursor.value.pane || 'hex' }
         }
+        if (hexAnchor.value > last) hexAnchor.value = last
         syncing.value = false
       }
 
       function rebuildFromFields() {
-        if (syncing.value) return
+        if (syncing.value || !manufacturerValid.value) return
         const data = rebuildEdid(bytesFromHex(hex.value), manufacturer.value, monitorName.value, timings.value)
         syncing.value = true
         hex.value = hexFromBytes(data)
@@ -622,36 +655,48 @@
 
       async function reloadCatalog() {
         const listed = await props.host.invoke('list', {})
+        presets.value = listed?.presets || []
         custom.value = listed?.custom || []
-        const response = await fetch('/api/video/edid', { credentials: 'same-origin' })
-        if (!response.ok) {
-          hdmiHex.value = ''
-          hdmiWritable.value = false
-          return
-        }
-        const body = await response.json()
-        hdmiHex.value = body.data_hex || ''
-        hdmiWritable.value = Boolean(body.writable)
       }
 
       async function loadSelection() {
+        const generation = ++loadGeneration
         busy.value = 'load'
         error.value = ''
         try {
+          let data
+          let meta
           if (selection.value === 'hdmi:current') {
-            const data = bytesFromHex(hdmiHex.value)
+            const response = await fetch('/api/video/edid', { credentials: 'same-origin', cache: 'no-store' })
+            if (!response.ok) {
+              hdmiWritable.value = false
+              throw new Error(t('noHdmi'))
+            }
+            const body = await response.json()
+            if (generation !== loadGeneration) return
+            hdmiWritable.value = Boolean(body.writable)
+            data = bytesFromHex(body.data_hex || '')
             if (!data) throw new Error(t('noHdmi'))
-            applyBytes(data, { kind: 'hdmi', id: '' })
-            return
+            meta = { kind: 'hdmi', id: '' }
+          } else {
+            const [source, id] = selection.value.split(':')
+            if (!['preset', 'custom'].includes(source) || !id) return
+            const body = await props.host.invoke('read', { source, id })
+            data = bytesFromHex(body.data_hex)
+            meta = { kind: source, id: body.id || id }
           }
-          const [source, id] = selection.value.split(':')
-          if (source !== 'custom' || !id) return
-          const body = await props.host.invoke('read', { source, id })
-          applyBytes(bytesFromHex(body.data_hex), { kind: 'custom', id: body.id || id })
+          if (generation === loadGeneration) applyBytes(data, meta)
         } catch (reason) {
+          if (generation !== loadGeneration) return
+          hex.value = ''
+          manufacturer.value = ''
+          monitorName.value = ''
+          timings.value = []
+          loadedKind.value = ''
+          loadedId.value = ''
           error.value = reasonText(reason)
         } finally {
-          busy.value = ''
+          if (generation === loadGeneration) busy.value = ''
         }
       }
 
@@ -688,6 +733,10 @@
       }
 
       async function saveCustom() {
+        if (!manufacturerValid.value) {
+          error.value = t('manufacturerInvalid')
+          return
+        }
         if (!isValidFileId(fileName.value)) {
           error.value = t('invalidName')
           return
@@ -771,27 +820,78 @@
       onMounted(() => {
         reloadCatalog().then(() => loadSelection()).catch((reason) => {
           error.value = reasonText(reason)
+        }).finally(() => {
+          busy.value = ''
         })
       })
 
       const row = (label, control) => h('label', { class: 'edid-row' }, [h('span', label), control])
-      const timingLabel = (timing) => `${timing.width}×${timing.height}@${timing.fps}${timing.preferred ? ` - ${t('preferred')}` : ''}`
+      const timingLabel = (timing) => `${timing.width}×${timing.height} @ ${timing.fps} Hz${timing.preferred ? ` · ${t('preferred')}` : ''}`
 
       function currentBytes() {
         return bytesFromHex(hex.value) || new Uint8Array(0)
       }
 
-      function moveCursor(index, nibble, pane) {
+      function moveCursor(index, nibble, pane, extend) {
         const data = currentBytes()
+        const nextPane = pane || hexCursor.value.pane || 'hex'
         if (!data.length) {
-          hexCursor.value = { index: 0, nibble: 0, pane: pane || 'hex' }
+          hexCursor.value = { index: 0, nibble: 0, pane: nextPane }
+          hexAnchor.value = 0
           return
         }
-        hexCursor.value = {
-          index: Math.max(0, Math.min(data.length - 1, index)),
-          nibble: nibble ? 1 : 0,
-          pane: pane || hexCursor.value.pane || 'hex',
+        const next = Math.max(0, Math.min(data.length - 1, index))
+        hexCursor.value = { index: next, nibble: nibble ? 1 : 0, pane: nextPane }
+        if (!extend) hexAnchor.value = next
+      }
+
+      function hexSelection() {
+        const start = Math.min(hexAnchor.value, hexCursor.value.index)
+        const end = Math.max(hexAnchor.value, hexCursor.value.index)
+        return { start, end, multi: start !== end }
+      }
+
+      function byteFromPoint(event) {
+        const node = document.elementFromPoint(event.clientX, event.clientY)
+        const el = node && node.closest ? node.closest('[data-byte]') : null
+        if (!el || !hexGridEl.value || !hexGridEl.value.contains(el)) return null
+        const index = Number(el.dataset.byte)
+        if (!Number.isInteger(index)) return null
+        return { index, pane: el.dataset.pane === 'ascii' ? 'ascii' : 'hex' }
+      }
+
+      function onHexPointerDown(event) {
+        if (event.button !== 0) return
+        const hit = byteFromPoint(event)
+        if (!hit) return
+        event.preventDefault()
+        hexGridEl.value?.focus({ preventScroll: true })
+        hexDrag = { pointerId: event.pointerId, pane: hit.pane }
+        try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* capture is optional */ }
+        moveCursor(hit.index, 0, hit.pane, event.shiftKey)
+      }
+
+      function onHexPointerMove(event) {
+        if (!hexDrag || hexDrag.pointerId !== event.pointerId) return
+        const hit = byteFromPoint(event)
+        if (!hit || hit.index === hexCursor.value.index) return
+        moveCursor(hit.index, 0, hexDrag.pane, true)
+      }
+
+      function onHexPointerUp(event) {
+        if (!hexDrag || hexDrag.pointerId !== event.pointerId) return
+        hexDrag = null
+        try { event.currentTarget.releasePointerCapture(event.pointerId) } catch { /* already released */ }
+      }
+
+      function selectedHexText() {
+        const data = currentBytes()
+        const { start, end } = hexSelection()
+        const parts = []
+        for (let index = start; index <= end && index < data.length; index += 1) {
+          parts.push(data[index].toString(16).padStart(2, '0'))
         }
+        return parts.join(' ')
       }
 
       function commitBytes(data, cursor) {
@@ -800,17 +900,14 @@
         hex.value = hexFromBytes(data)
         if (validEdid(data)) {
           syncing.value = true
-          manufacturer.value = manufacturerOf(data) || manufacturer.value
-          monitorName.value = monitorNameOf(data) || monitorName.value
+          manufacturer.value = manufacturerOf(data)
+          monitorName.value = monitorNameOf(data)
           timings.value = parseTimings(data)
           pnpCustom.value = !PNP_PRESETS.some((item) => item.id === manufacturer.value)
           syncing.value = false
         }
-        hexCursor.value = {
-          index: Math.max(0, Math.min(data.length - 1, cursor.index)),
-          nibble: cursor.nibble ? 1 : 0,
-          pane: cursor.pane || 'hex',
-        }
+        hexCursor.value = { index, nibble: cursor.nibble ? 1 : 0, pane: cursor.pane || 'hex' }
+        hexAnchor.value = index
       }
 
       function writeNibble(digit) {
@@ -839,52 +936,68 @@
       function onHexKey(event) {
         const data = currentBytes()
         if (!data.length) return
-        const cursor = hexCursor.value
+        const key = event.key.toLowerCase()
+        if ((event.ctrlKey || event.metaKey) && key === 'a') {
+          event.preventDefault()
+          hexAnchor.value = 0
+          hexCursor.value = { index: data.length - 1, nibble: 0, pane: hexCursor.value.pane || 'hex' }
+          return
+        }
+        if ((event.ctrlKey || event.metaKey) && key === 'c') {
+          event.preventDefault()
+          const text = selectedHexText()
+          if (text && navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {})
+          return
+        }
         if (event.ctrlKey || event.metaKey || event.altKey) return
+        const cursor = hexCursor.value
+        const extend = event.shiftKey
         if (cursor.pane === 'ascii') {
-          if (event.key.length === 1) {
+          if (!extend && event.key.length === 1) {
             event.preventDefault()
             writeAscii(event.key)
             return
           }
           if (event.key === 'ArrowLeft') {
             event.preventDefault()
-            moveCursor(cursor.index - 1, 0, 'ascii')
+            moveCursor(cursor.index - 1, 0, 'ascii', extend)
           } else if (event.key === 'ArrowRight') {
             event.preventDefault()
-            moveCursor(cursor.index + 1, 0, 'ascii')
+            moveCursor(cursor.index + 1, 0, 'ascii', extend)
           } else if (event.key === 'ArrowUp') {
             event.preventDefault()
-            moveCursor(cursor.index - 16, 0, 'ascii')
+            moveCursor(cursor.index - 16, 0, 'ascii', extend)
           } else if (event.key === 'ArrowDown') {
             event.preventDefault()
-            moveCursor(cursor.index + 16, 0, 'ascii')
-          } else if (event.key === 'Backspace') {
+            moveCursor(cursor.index + 16, 0, 'ascii', extend)
+          } else if (event.key === 'Backspace' && !extend) {
             event.preventDefault()
             moveCursor(cursor.index - 1, 0, 'ascii')
           }
           return
         }
-        if (/^[0-9a-fA-F]$/.test(event.key)) {
+        if (!extend && /^[0-9a-fA-F]$/.test(event.key)) {
           event.preventDefault()
           writeNibble(event.key)
           return
         }
         if (event.key === 'ArrowLeft') {
           event.preventDefault()
-          if (cursor.nibble === 1) moveCursor(cursor.index, 0, 'hex')
+          if (extend) moveCursor(cursor.index - 1, 0, 'hex', true)
+          else if (cursor.nibble === 1) moveCursor(cursor.index, 0, 'hex')
           else moveCursor(cursor.index - 1, 1, 'hex')
         } else if (event.key === 'ArrowRight') {
           event.preventDefault()
-          if (cursor.nibble === 0) moveCursor(cursor.index, 1, 'hex')
+          if (extend) moveCursor(cursor.index + 1, 0, 'hex', true)
+          else if (cursor.nibble === 0) moveCursor(cursor.index, 1, 'hex')
           else moveCursor(cursor.index + 1, 0, 'hex')
         } else if (event.key === 'ArrowUp') {
           event.preventDefault()
-          moveCursor(cursor.index - 16, cursor.nibble, 'hex')
+          moveCursor(cursor.index - 16, extend ? 0 : cursor.nibble, 'hex', extend)
         } else if (event.key === 'ArrowDown') {
           event.preventDefault()
-          moveCursor(cursor.index + 16, cursor.nibble, 'hex')
-        } else if (event.key === 'Backspace') {
+          moveCursor(cursor.index + 16, extend ? 0 : cursor.nibble, 'hex', extend)
+        } else if (event.key === 'Backspace' && !extend) {
           event.preventDefault()
           if (cursor.nibble === 1) moveCursor(cursor.index, 0, 'hex')
           else moveCursor(cursor.index - 1, 1, 'hex')
@@ -894,14 +1007,10 @@
         }
       }
 
-      function selectByte(index, pane) {
-        moveCursor(index, 0, pane || 'hex')
-        hexGridEl.value?.focus()
-      }
-
       const hexField = (editable) => {
         const data = currentBytes()
         const cursor = hexCursor.value
+        const range = hexSelection()
         const rows = []
         for (let offset = 0; offset < data.length; offset += 16) {
           const left = []
@@ -915,21 +1024,26 @@
               ascii.push(h('span', { class: 'edid-hex-asc is-empty' }, ' '))
               continue
             }
-            const selected = editable && cursor.index === index
+            const inRange = editable && index >= range.start && index <= range.end
+            const caret = inRange && cursor.index === index
             const ch = data[index] >= 32 && data[index] < 127 ? String.fromCharCode(data[index]) : '.'
             const text = data[index].toString(16).padStart(2, '0')
-            group.push(h('button', {
+            group.push(h(editable ? 'button' : 'span', {
               type: 'button',
-              class: ['edid-hex-byte', selected && cursor.pane === 'hex' ? 'is-selected' : ''].filter(Boolean).join(' '),
-              onClick: () => { if (editable) selectByte(index, 'hex') },
+              tabindex: -1,
+              'data-byte': String(index),
+              'data-pane': 'hex',
+              class: ['edid-hex-byte', inRange ? 'is-selected' : '', caret && range.multi && cursor.pane === 'hex' ? 'is-caret' : ''].filter(Boolean).join(' '),
             }, [
-              h('span', { class: selected && cursor.pane === 'hex' && cursor.nibble === 0 ? 'is-nib' : '' }, text[0]),
-              h('span', { class: selected && cursor.pane === 'hex' && cursor.nibble === 1 ? 'is-nib' : '' }, text[1]),
+              h('span', { class: caret && cursor.pane === 'hex' && cursor.nibble === 0 ? 'is-nib' : '' }, text[0]),
+              h('span', { class: caret && cursor.pane === 'hex' && cursor.nibble === 1 ? 'is-nib' : '' }, text[1]),
             ]))
-            ascii.push(h('button', {
+            ascii.push(h(editable ? 'button' : 'span', {
               type: 'button',
-              class: ['edid-hex-asc', selected && cursor.pane === 'ascii' ? 'is-selected' : ''].filter(Boolean).join(' '),
-              onClick: () => { if (editable) selectByte(index, 'ascii') },
+              tabindex: -1,
+              'data-byte': String(index),
+              'data-pane': 'ascii',
+              class: ['edid-hex-asc', inRange ? 'is-selected' : '', caret && range.multi && cursor.pane === 'ascii' ? 'is-caret' : ''].filter(Boolean).join(' '),
             }, ch))
           }
           rows.push(h('div', { class: 'edid-hex-row' }, [
@@ -942,174 +1056,223 @@
           ]))
         }
         return h('div', { class: 'edid-hex-wrap' }, [
-          h('h3', editable ? t('hexEditor') : t('hexViewer')),
-          h('p', { class: 'edid-hint' }, editable ? t('hexHint') : null),
+          editable ? h('p', { class: 'edid-hint' }, t('hexHint')) : null,
           h('div', {
             class: ['edid-hex-grid', editable ? 'is-edit' : 'is-view'].join(' '),
             tabindex: editable ? 0 : -1,
             ref: editable ? (el) => { hexGridEl.value = el } : undefined,
             onKeydown: editable ? onHexKey : undefined,
+            onPointerdown: editable ? onHexPointerDown : undefined,
+            onPointermove: editable ? onHexPointerMove : undefined,
+            onPointerup: editable ? onHexPointerUp : undefined,
+            onPointercancel: editable ? onHexPointerUp : undefined,
           }, rows.length ? rows : [h('p', t('empty'))]),
         ])
       }
 
-      const viewPane = () => h('div', { class: 'edid-pane' }, [
-        h(NSelect, {
-          value: selection.value,
-          options: fileOptions.value,
-          loading: busy.value === 'load',
-          'onUpdate:value': (value) => { selection.value = value },
+      const hexSection = (editable) => h(NCollapse, { class: 'edid-hex-collapse' }, {
+        default: () => h(NCollapseItem, { name: 'hex', title: t(editable ? 'hexEditor' : 'hexViewer') }, {
+          default: () => hexField(editable),
         }),
-        row(t('fileName'), h(NInput, {
-          value: loadedKind.value === 'custom' ? fileLabel(loadedId.value) : (loadedKind.value === 'hdmi' ? t('hdmi') : fileName.value),
-          readonly: true,
-        })),
-        loaded.value ? h('dl', { class: 'edid-props' }, [
-          h('dt', t('manufacturer')), h('dd', pnpLabel(manufacturer.value)),
-          h('dt', t('name')), h('dd', monitorName.value),
-          h('dt', t('size')), h('dd', `${(hex.value.length / 2) | 0} B`),
-          h('dt', t('timings')), h('dd', timings.value.map(timingLabel).join(', ')),
-        ]) : h('p', t('empty')),
-        hexField(true),
-        h('div', { class: 'edid-actions' }, [
-          h(NButton, { type: 'primary', disabled: !loaded.value || !hdmiWritable.value, loading: busy.value === 'apply', onClick: applyHdmi }, { default: () => t('apply') }),
+      })
+
+      const viewPane = () => h('div', { class: 'edid-split' }, [
+        h('div', { class: 'edid-form' }, [
+          h(NSelect, {
+            value: selection.value,
+            options: fileOptions.value,
+            filterable: true,
+            disabled: Boolean(busy.value),
+            loading: busy.value === 'load',
+            'onUpdate:value': (value) => { selection.value = value },
+          }),
+          busy.value === 'load' ? h('div', { class: 'edid-loading', role: 'status' }, [
+            h(NSpin, { class: 'edid-loading-spin', size: 18 }),
+            h('span', selection.value === 'hdmi:current' ? t('loadingHdmi') : t('loadingFile')),
+          ]) : loaded.value ? h('dl', { class: 'edid-props' }, [
+            h('dt', t('manufacturer')), h('dd', { class: 'edid-vendor-name' }, pnpLabel(manufacturer.value)),
+            h('dt', t('manufacturerId')), h('dd', manufacturer.value || '—'),
+            h('dt', t('name')), h('dd', monitorName.value || '—'),
+            h('dt', t('source')), h('dd', loadedSource.value),
+            h('dt', t('version')), h('dd', `${currentBytes()[18]}.${currentBytes()[19]} · ${(hex.value.length / 2) | 0} B`),
+            h('dt', t('timings')), h('dd', { class: 'edid-mode-list' }, timings.value.map(timing => h('span', {
+              class: ['edid-mode', timing.preferred ? 'is-preferred' : ''],
+            }, timingLabel(timing)))),
+          ]) : h('p', { class: 'edid-empty' }, t('empty')),
+          h('div', { class: 'edid-actions' }, [
+            h(NButton, { type: 'primary', disabled: !loaded.value || !manufacturerValid.value || !hdmiWritable.value || Boolean(busy.value), loading: busy.value === 'apply', onClick: applyHdmi }, { default: () => t('apply') }),
+          ]),
+          h('p', { class: 'edid-hint' }, t('applyHint')),
         ]),
-        h('p', { class: 'edid-hint' }, t('applyHint')),
+        loaded.value && busy.value !== 'load' ? hexSection(false) : null,
       ])
 
-      const editPane = () => h('div', { class: 'edid-pane' }, [
-        h('input', {
-          type: 'file',
-          accept: '.edid.bin,application/octet-stream',
-          style: 'display:none',
-          ref: (el) => { importInput.value = el },
-          onChange: importFile,
-        }),
-        h('div', { class: 'edid-toolbar' }, [
-          h('div', { class: 'edid-import-alert' }, [
-            h(NAlert, { type: 'info', showIcon: false }, { default: () => t('importAlert') }),
+      const editPane = () => h('div', { class: 'edid-split' }, [
+        h('div', { class: 'edid-form' }, [
+          h('input', {
+            type: 'file',
+            accept: '.edid.bin,application/octet-stream',
+            style: 'display:none',
+            ref: (el) => { importInput.value = el },
+            onChange: importFile,
+          }),
+          h(NAlert, { type: 'info', showIcon: false, class: 'edid-import-alert' }, {
+            default: () => h('div', { class: 'edid-import-body' }, [
+              h('span', t('importAlert')),
+              h(NButton, { class: 'edid-import-btn', onClick: openImport }, { default: () => t('importFile') }),
+            ]),
+          }),
+          h('h3', t('identity')),
+          h('div', { class: 'edid-identity' }, [
+            row(t('manufacturerPreset'), h(NSelect, {
+              value: manufacturerSelect.value,
+              options: pnpOptions.value,
+              filterable: true,
+              'onUpdate:value': (value) => {
+                if (value === PNP_CUSTOM) {
+                  pnpCustom.value = true
+                  return
+                }
+                pnpCustom.value = false
+                manufacturer.value = value
+                rebuildFromFields()
+              },
+            })),
+            row(t('name'), h(NInput, {
+              value: monitorName.value,
+              maxlength: 13,
+              'onUpdate:value': (value) => { monitorName.value = value; rebuildFromFields() },
+            })),
           ]),
-          h(NButton, { class: 'edid-import-btn', onClick: openImport }, { default: () => t('importFile') }),
-        ]),
-        h('h3', t('identity')),
-        row(t('manufacturerPreset'), h(NSelect, {
-          value: manufacturerSelect.value,
-          options: pnpOptions.value,
-          'onUpdate:value': (value) => {
-            if (value === PNP_CUSTOM) {
+          manufacturerSelect.value === PNP_CUSTOM ? row(t('manufacturerCustom'), h(NInput, {
+            value: manufacturer.value,
+            maxlength: 3,
+            status: manufacturerValid.value ? undefined : 'error',
+            placeholder: 'OKV',
+            'onUpdate:value': (value) => {
               pnpCustom.value = true
-              return
-            }
-            pnpCustom.value = false
-            manufacturer.value = value
-            rebuildFromFields()
-          },
-        })),
-        row(t('manufacturerCustom'), h(NInput, {
-          value: manufacturer.value,
-          maxlength: 3,
-          placeholder: 'OKV',
-          'onUpdate:value': (value) => {
-            pnpCustom.value = true
-            manufacturer.value = String(value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
-            rebuildFromFields()
-          },
-        })),
-        h('p', { class: 'edid-hint' }, t('manufacturerHint')),
-        row(t('name'), h(NInput, {
-          value: monitorName.value,
-          maxlength: 13,
-          'onUpdate:value': (value) => { monitorName.value = value; rebuildFromFields() },
-        })),
-        h('h3', t('timings')),
-        h('div', { class: 'edid-timing-add' }, [
-          h('div', { class: 'edid-timing-add-select' }, [
-            h(NSelect, {
-              value: null,
-              options: templateOptions,
-              placeholder: t('template'),
-              'onUpdate:value': (value) => { if (value) addTiming(value) },
-            }),
+              manufacturer.value = String(value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3)
+              rebuildFromFields()
+            },
+          })) : null,
+          manufacturerSelect.value === PNP_CUSTOM && !manufacturerValid.value ? h('p', { class: 'edid-field-error' }, t('manufacturerInvalid')) : null,
+          manufacturerSelect.value === PNP_CUSTOM ? h('p', { class: 'edid-hint' }, t('manufacturerHint')) : null,
+          h('h3', t('timings')),
+          h('div', { class: 'edid-timing-add' }, [
+            h('div', { class: 'edid-timing-add-select' }, [
+              h(NSelect, {
+                value: null,
+                options: templateOptions,
+                placeholder: t('template'),
+                'onUpdate:value': (value) => { if (value) addTiming(value) },
+              }),
+            ]),
+            h(NButton, { class: 'edid-timing-add-btn', onClick: addCustomTiming }, { default: () => t('addCustomTiming') }),
           ]),
-          h(NButton, { class: 'edid-timing-add-btn', onClick: addCustomTiming }, { default: () => t('addCustomTiming') }),
+          ...timings.value.map((timing, index) => h('div', { class: 'edid-timing' }, [
+            h('div', { class: 'edid-timing-head' }, [
+              h('strong', timingLabel(timing)),
+              h(NButton, { size: 'small', disabled: timing.preferred, onClick: () => setPreferred(index) }, { default: () => t('preferred') }),
+              h(NButton, { size: 'small', disabled: timings.value.length <= 1, onClick: () => removeTiming(index) }, { default: () => t('removeTiming') }),
+            ]),
+            h('div', { class: 'edid-grid edid-grid-mode' }, [
+              row(t('width'), h(NInputNumber, { value: timing.width, min: 640, max: 4096, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { width: value ?? timing.width }) })),
+              row(t('height'), h(NInputNumber, { value: timing.height, min: 480, max: 2160, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { height: value ?? timing.height }) })),
+              row(t('fps'), h(NInputNumber, { value: timing.fps, min: 24, max: 240, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { fps: value ?? timing.fps }) })),
+            ]),
+            h(NButton, {
+              size: 'small',
+              quaternary: true,
+              class: 'edid-advanced-toggle',
+              onClick: () => { timingAdvanced.value = { ...timingAdvanced.value, [index]: !timingAdvanced.value[index] } },
+            }, { default: () => t('customParams') }),
+            timingAdvanced.value[index] ? h('div', { class: 'edid-grid edid-grid-params' }, [
+              row(t('pixclk'), h(NInputNumber, { value: timing.pixclk, min: 2500, max: 60000, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { pixclk: value ?? timing.pixclk }) })),
+              row(t('hblank'), h(NInputNumber, { value: timing.hblank, min: 16, max: 1024, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { hblank: value ?? timing.hblank }) })),
+              row(t('vblank'), h(NInputNumber, { value: timing.vblank, min: 4, max: 256, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vblank: value ?? timing.vblank }) })),
+              row(t('hso'), h(NInputNumber, { value: timing.hso, min: 0, max: 1023, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { hso: value ?? timing.hso }) })),
+              row(t('hsw'), h(NInputNumber, { value: timing.hsw, min: 1, max: 1023, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { hsw: value ?? timing.hsw }) })),
+              row(t('vso'), h(NInputNumber, { value: timing.vso, min: 0, max: 63, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vso: value ?? timing.vso }) })),
+              row(t('vsw'), h(NInputNumber, { value: timing.vsw, min: 1, max: 63, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vsw: value ?? timing.vsw }) })),
+            ]) : null,
+          ])),
+          h('div', { class: 'edid-savebar' }, [
+            row(t('fileName'), h(NInput, {
+              value: fileName.value,
+              placeholder: t('filePlaceholder'),
+              maxlength: 72,
+              'onUpdate:value': (value) => { fileName.value = String(value || '').trim() },
+            })),
+            h('div', { class: 'edid-actions' }, [
+              h(NButton, { type: 'primary', disabled: !loaded.value || !manufacturerValid.value || Boolean(busy.value), loading: busy.value === 'save', onClick: saveCustom }, { default: () => t('save') }),
+              h(NButton, { disabled: !canDelete.value || Boolean(busy.value), loading: busy.value === 'delete', onClick: deleteCustom }, { default: () => t('remove') }),
+            ]),
+          ]),
+          loadedKind.value === 'preset' ? h('p', { class: 'edid-hint' }, t('presetReadOnly')) : null,
         ]),
-        ...timings.value.map((timing, index) => h('div', { class: 'edid-timing' }, [
-          h('div', { class: 'edid-timing-head' }, [
-            h('strong', timingLabel(timing)),
-            h(NButton, { size: 'small', disabled: timing.preferred, onClick: () => setPreferred(index) }, { default: () => t('preferred') }),
-            h(NButton, { size: 'small', disabled: timings.value.length <= 1, onClick: () => removeTiming(index) }, { default: () => t('removeTiming') }),
-          ]),
-          h('div', { class: 'edid-grid' }, [
-            row(t('width'), h(NInputNumber, { value: timing.width, min: 640, max: 4096, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { width: value ?? timing.width }) })),
-            row(t('height'), h(NInputNumber, { value: timing.height, min: 480, max: 2160, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { height: value ?? timing.height }) })),
-            row(t('fps'), h(NInputNumber, { value: timing.fps, min: 24, max: 240, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { fps: value ?? timing.fps }) })),
-          ]),
-          h('h4', t('customParams')),
-          h('div', { class: 'edid-grid' }, [
-            row(t('pixclk'), h(NInputNumber, { value: timing.pixclk, min: 2500, max: 60000, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { pixclk: value ?? timing.pixclk }) })),
-            row(t('hblank'), h(NInputNumber, { value: timing.hblank, min: 16, max: 1024, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { hblank: value ?? timing.hblank }) })),
-            row(t('vblank'), h(NInputNumber, { value: timing.vblank, min: 4, max: 256, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vblank: value ?? timing.vblank }) })),
-            row(t('hso'), h(NInputNumber, { value: timing.hso, min: 0, max: 1023, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { hso: value ?? timing.hso }) })),
-            row(t('hsw'), h(NInputNumber, { value: timing.hsw, min: 1, max: 1023, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { hsw: value ?? timing.hsw }) })),
-            row(t('vso'), h(NInputNumber, { value: timing.vso, min: 0, max: 63, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vso: value ?? timing.vso }) })),
-            row(t('vsw'), h(NInputNumber, { value: timing.vsw, min: 1, max: 63, precision: 0, 'onUpdate:value': (value) => updateTiming(index, { vsw: value ?? timing.vsw }) })),
-          ]),
-        ])),
-        hexField(true),
-        row(t('fileName'), h(NInput, {
-          value: fileName.value,
-          placeholder: t('filePlaceholder'),
-          maxlength: 72,
-          'onUpdate:value': (value) => { fileName.value = String(value || '').trim() },
-        })),
-        h('div', { class: 'edid-actions' }, [
-          h(NButton, { type: 'primary', disabled: !loaded.value, loading: busy.value === 'save', onClick: saveCustom }, { default: () => t('save') }),
-          h(NButton, { disabled: !canDelete.value, loading: busy.value === 'delete', onClick: deleteCustom }, { default: () => t('remove') }),
-        ]),
+        loaded.value ? hexSection(true) : null,
       ])
 
       return () => h('section', { class: 'edid-editor' }, [
-        h('h2', t('title')),
-        h('p', t('description')),
+        h('p', { class: 'edid-hint' }, t('description')),
         error.value ? h(NAlert, { type: 'error', showIcon: false }, { default: () => error.value }) : null,
         h(NTabs, { value: tab.value, type: 'line', 'onUpdate:value': (value) => { tab.value = value } }, {
           default: () => [
             h(NTabPane, { name: 'view', tab: t('tabView') }, { default: viewPane }),
-            h(NTabPane, { name: 'edit', tab: t('tabEdit') }, { default: editPane }),
+            h(NTabPane, { name: 'edit', tab: t('tabEdit'), disabled: busy.value === 'load' }, { default: editPane }),
           ],
         }),
       ])
     },
   })
 
-  runtime.register('edid', {
+  runtime.register('edid-editor', {
     apiVersion: 1,
     component: Page,
     styles: [`
-      .edid-editor { display: grid; gap: 16px; }
-      .edid-editor h2 { margin: 0; }
-      .edid-editor h3 { margin: 8px 0 0; }
-      .edid-editor h4 { margin: 4px 0 0; font-size: 13px; }
+      .edid-editor { display: grid; gap: 12px; min-width: 0; }
+      .edid-editor h3 { margin: 0; }
       .edid-editor p { margin: 0; }
-      .edid-pane { display: grid; gap: 16px; padding-top: 8px; }
-      .edid-toolbar { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 12px; align-items: center; }
-      .edid-import-alert { flex: 1 1 auto; min-width: 0; }
-      .edid-import-alert .n-alert { margin: 0; width: auto; }
-      .edid-import-btn { flex: 0 0 auto; white-space: nowrap; }
-      .edid-row { display: grid; gap: 8px; }
+      .edid-split { display: grid; gap: 16px; min-width: 0; }
+      .edid-form { container-type: inline-size; display: grid; gap: 12px; min-width: 0; align-content: start; }
+      .edid-import-alert { margin: 0; }
+      .edid-import-body { display: flex; gap: 12px; align-items: center; }
+      .edid-import-body > span { flex: 1 1 auto; min-width: 0; }
+      .edid-import-btn { flex: 0 0 auto; }
+      .edid-timing-add, .edid-savebar { display: flex; gap: 12px; align-items: center; }
+      .edid-savebar { align-items: end; }
+      .edid-timing-add-select, .edid-savebar > .edid-row { flex: 1 1 auto; min-width: 0; }
+      .edid-timing-add-btn { flex: 0 0 auto; white-space: nowrap; }
+      .edid-identity { display: grid; gap: 12px; }
+      @container (max-width: 520px) {
+        .edid-timing-add, .edid-savebar { flex-wrap: wrap; }
+      }
+      .edid-row { display: grid; gap: 6px; min-width: 0; }
       .edid-row > span { font-size: 13px; font-weight: 600; }
-      .edid-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 14px; }
-      .edid-actions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 4px; }
-      .edid-hint { opacity: 0.78; font-size: 13px; }
-      .edid-props { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
-      .edid-props dt { font-weight: 600; }
-      .edid-props dd { margin: 0; }
+      .edid-grid { display: grid; gap: 12px; }
+      .edid-grid-mode { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .edid-grid-params { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      @container (max-width: 380px) {
+        .edid-grid-mode, .edid-grid-params { grid-template-columns: 1fr; }
+      }
+      .edid-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .edid-loading { display: flex; align-items: center; gap: 10px; min-height: 72px; color: var(--muted-foreground); font-size: 13px; }
+      .edid-loading .edid-loading-spin { position: static; transform: none; flex-shrink: 0; }
+      .edid-advanced-toggle { justify-self: start; }
+      .edid-hint, .edid-empty { color: var(--muted-foreground); font-size: 13px; line-height: 1.5; }
+      .edid-field-error { color: var(--destructive); font-size: 12px; }
+      .edid-props { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 10px 20px; margin: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--onekvm-surface-raised); }
+      .edid-props dt { color: var(--muted-foreground); font-size: 13px; }
+      .edid-props dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+      .edid-vendor-name { font-weight: 600; }
+      .edid-mode-list { display: flex; flex-wrap: wrap; gap: 6px; }
+      .edid-mode { padding: 3px 7px; border-radius: 4px; background: var(--accent); font-size: 12px; font-variant-numeric: tabular-nums; }
+      .edid-mode.is-preferred { color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); }
+      .edid-hex-collapse { min-width: 0; padding-top: 4px; }
       .edid-timing { display: grid; gap: 12px; padding: 14px; border: 1px solid rgba(127,127,127,0.28); border-radius: 10px; }
       .edid-timing-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-      .edid-timing-add { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 12px; align-items: center; }
-      .edid-timing-add-select { flex: 1 1 auto; min-width: 0; }
-      .edid-timing-add-btn { flex: 0 0 auto; white-space: nowrap; }
-      .edid-hex-wrap { display: grid; gap: 10px; }
+      .edid-timing-head strong { flex: 1 1 auto; min-width: 0; }
+      .edid-hex-wrap { display: grid; gap: 8px; min-width: 0; }
       .edid-hex-grid {
         outline: none;
         padding: 12px;
@@ -1119,12 +1282,15 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 12px;
         line-height: 1.5;
+        user-select: none;
+        -webkit-user-select: none;
       }
       .edid-hex-grid.is-edit:focus { box-shadow: inset 0 0 0 1px rgba(24,160,88,0.7); }
-      .edid-hex-row { display: grid; grid-template-columns: 3.2em max-content max-content; gap: 12px; align-items: center; }
+      .edid-hex-grid.is-view { user-select: text; -webkit-user-select: text; }
+      .edid-hex-row { display: grid; grid-template-columns: 3.2em max-content max-content; gap: 8px; align-items: center; }
       .edid-hex-off { opacity: 0.55; }
-      .edid-hex-bytes { display: flex; gap: 12px; }
-      .edid-hex-group { display: grid; grid-template-columns: repeat(8, 1.75em); }
+      .edid-hex-bytes { display: flex; gap: 8px; }
+      .edid-hex-group { display: grid; grid-template-columns: repeat(8, 1.55em); }
       .edid-hex-ascii { display: grid; grid-template-columns: repeat(16, 1em); }
       .edid-hex-byte, .edid-hex-asc {
         margin: 0;
@@ -1139,7 +1305,9 @@
         cursor: default;
       }
       .edid-hex-grid.is-edit .edid-hex-byte, .edid-hex-grid.is-edit .edid-hex-asc { cursor: text; }
+      .edid-hex-byte:focus, .edid-hex-asc:focus { outline: none; }
       .edid-hex-byte.is-selected, .edid-hex-asc.is-selected { background: #18a058; color: #fff; }
+      .edid-hex-byte.is-caret, .edid-hex-asc.is-caret { box-shadow: inset 0 0 0 1px #fff; }
       .edid-hex-byte .is-nib { text-decoration: underline; }
     `],
   })

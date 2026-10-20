@@ -8,13 +8,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define MAX_STDIN (64 * 1024)
 #define MAX_EDID 512
+#define MAX_REQUEST (MAX_EDID * 2 + 256)
 #define BLOCK 128
 #define EDID_SUFFIX ".edid.bin"
 #define LEGACY_SUFFIX ".bin"
-
-static char stdin_buf[MAX_STDIN + 1];
+#define PRESET_DIR "/usr/share/onekvm/edid/presets"
 
 static int valid_id(const char *id)
 {
@@ -81,58 +80,6 @@ static int json_string(const char *json, const char *key, char *out, size_t out_
     if (*end != '"')
         return -1;
     return json_unescape_copy(p, (size_t)(end - p), out, out_size);
-}
-
-static int json_extract_object(const char *json, const char *key, char *out, size_t out_size)
-{
-    char needle[80];
-    const char *p;
-    int depth = 0;
-    int in_str = 0;
-    int esc = 0;
-    size_t o = 0;
-
-    if (snprintf(needle, sizeof(needle), "\"%s\"", key) >= (int)sizeof(needle))
-        return -1;
-    p = strstr(json, needle);
-    if (p == NULL)
-        return -1;
-    p = strchr(p + strlen(needle), ':');
-    if (p == NULL)
-        return -1;
-    p++;
-    while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
-        p++;
-    if (*p != '{')
-        return -1;
-    for (; *p; p++) {
-        if (o + 1 >= out_size)
-            return -1;
-        out[o++] = *p;
-        if (in_str) {
-            if (esc)
-                esc = 0;
-            else if (*p == '\\')
-                esc = 1;
-            else if (*p == '"')
-                in_str = 0;
-            continue;
-        }
-        if (*p == '"') {
-            in_str = 1;
-            continue;
-        }
-        if (*p == '{')
-            depth++;
-        else if (*p == '}') {
-            depth--;
-            if (depth == 0) {
-                out[o] = '\0';
-                return 0;
-            }
-        }
-    }
-    return -1;
 }
 
 static int hex_value(int c)
@@ -308,15 +255,12 @@ static int resolve_existing(const char *dir, const char *id, char *out, size_t o
 
 static void plan_ok(const char *response_json)
 {
-    if (response_json == NULL || response_json[0] == '\0')
-        fputs("{\"actions\":[]}\n", stdout);
-    else
-        printf("{\"actions\":[],\"response\":%s}\n", response_json);
+    puts(response_json == NULL || response_json[0] == '\0' ? "{\"ok\":true}" : response_json);
 }
 
 static void fail(const char *message)
 {
-    fprintf(stderr, "onekvm-extension-edid: %s\n", message);
+    fprintf(stderr, "onekvm-extension-edid-editor: %s\n", message);
     exit(1);
 }
 
@@ -333,14 +277,6 @@ static const char *basename_of(const char *path)
 {
     const char *slash = strrchr(path, '/');
     return slash ? slash + 1 : path;
-}
-
-static const char *invoke_request(void)
-{
-    static char request[MAX_STDIN];
-    if (json_extract_object(stdin_buf, "request", request, sizeof(request)) == 0)
-        return request;
-    return stdin_buf;
 }
 
 static int append_json(char *out, size_t out_size, size_t *len, const char *chunk)
@@ -406,7 +342,7 @@ static void handle_list(void)
     if (append_json(json, sizeof(json), &len, "{\"ok\":true,\"presets\":[") != 0)
         fail("list response is too large");
     first = 1;
-    if (list_dir_files("share/edid", "share/edid", json, sizeof(json), &len, &first) != 0)
+    if (list_dir_files(PRESET_DIR, PRESET_DIR, json, sizeof(json), &len, &first) != 0)
         fail("read preset EDID directory failed");
     if (append_json(json, sizeof(json), &len, "],\"custom\":[") != 0)
         fail("list response is too large");
@@ -434,7 +370,7 @@ static void handle_read(const char *request)
     if (!valid_id(id))
         fail("invalid EDID id");
     if (strcmp(source, "preset") == 0) {
-        if (resolve_existing("share/edid", id, path, sizeof(path)) != 0)
+        if (resolve_existing(PRESET_DIR, id, path, sizeof(path)) != 0)
             fail("EDID file not found or invalid");
     } else if (strcmp(source, "custom") == 0) {
         char dir[512];
@@ -446,8 +382,8 @@ static void handle_read(const char *request)
     if (read_file(path, data, &n) != 0)
         fail("EDID file not found or invalid");
     encode_hex(data, n, hex, sizeof(hex));
-    printf("{\"actions\":[],\"response\":{\"ok\":true,\"id\":\"%s\",\"source\":\"%s\",\"path\":\"%s/%s\",\"data_hex\":\"%s\"}}\n",
-           id, source, strcmp(source, "preset") == 0 ? "share/edid" : "edid", basename_of(path), hex);
+    printf("{\"ok\":true,\"id\":\"%s\",\"source\":\"%s\",\"path\":\"%s/%s\",\"data_hex\":\"%s\"}\n",
+           id, source, strcmp(source, "preset") == 0 ? PRESET_DIR : "edid", basename_of(path), hex);
 }
 
 static void handle_save(const char *request)
@@ -468,7 +404,7 @@ static void handle_save(const char *request)
     custom_dir(dir, sizeof(dir));
     if (write_file_atomic(dir, id, data, n) != 0)
         fail("write custom EDID failed");
-    printf("{\"actions\":[],\"response\":{\"ok\":true,\"id\":\"%s\",\"path\":\"edid/%s%s\"}}\n",
+    printf("{\"ok\":true,\"id\":\"%s\",\"path\":\"edid/%s%s\"}\n",
            id, id, EDID_SUFFIX);
 }
 
@@ -495,43 +431,42 @@ static void handle_delete(const char *request)
     plan_ok("{\"ok\":true}");
 }
 
-static int run_controller(void)
+static int run_cli(int argc, char **argv)
 {
-    char event[32] = {0};
-    char method[32] = {0};
-    size_t n = fread(stdin_buf, 1, MAX_STDIN, stdin);
-    if (n == 0 || n >= MAX_STDIN)
-        fail("controller request is empty or too large");
-    stdin_buf[n] = '\0';
-    if (json_string(stdin_buf, "event", event, sizeof(event)) != 0)
-        fail("controller event is missing");
-    if (strcmp(event, "invoke") != 0) {
-        plan_ok(NULL);
+    char request[MAX_REQUEST];
+
+    if (strcmp(argv[1], "list") == 0 && argc == 2) {
+        handle_list();
         return 0;
     }
-    if (json_string(stdin_buf, "method", method, sizeof(method)) != 0)
-        fail("invoke method is missing");
-    if (strcmp(method, "list") == 0)
-        handle_list();
-    else if (strcmp(method, "read") == 0)
-        handle_read(invoke_request());
-    else if (strcmp(method, "save") == 0)
-        handle_save(invoke_request());
-    else if (strcmp(method, "delete") == 0)
-        handle_delete(invoke_request());
-    else
-        fail("unsupported method");
-    return 0;
+    if (strcmp(argv[1], "read") == 0 && argc == 4) {
+        if (snprintf(request, sizeof(request), "{\"source\":\"%s\",\"id\":\"%s\"}",
+                     argv[2], argv[3]) >= (int)sizeof(request))
+            fail("read arguments are too long");
+        handle_read(request);
+        return 0;
+    }
+    if (strcmp(argv[1], "save") == 0 && argc == 4) {
+        if (snprintf(request, sizeof(request), "{\"id\":\"%s\",\"data_hex\":\"%s\"}",
+                     argv[2], argv[3]) >= (int)sizeof(request))
+            fail("save arguments are too long");
+        handle_save(request);
+        return 0;
+    }
+    if (strcmp(argv[1], "delete") == 0 && argc == 3) {
+        if (snprintf(request, sizeof(request), "{\"id\":\"%s\"}", argv[2]) >= (int)sizeof(request))
+            fail("delete arguments are too long");
+        handle_delete(request);
+        return 0;
+    }
+    return -1;
 }
 
 int main(int argc, char **argv)
 {
-    if (argc == 2 && strcmp(argv[1], "--health") == 0)
+    if (argc > 1 && run_cli(argc, argv) == 0)
         return 0;
-    if (argc == 2 && strcmp(argv[1], "--controller") == 0)
-        return run_controller();
-    if (argc <= 1)
-        return 0;
-    fprintf(stderr, "usage: onekvm-extension-edid [--health|--controller]\n");
+    fprintf(stderr,
+            "usage: onekvm-extension-edid-editor [list|read SOURCE ID|save ID DATA_HEX|delete ID]\n");
     return 2;
 }

@@ -20,12 +20,12 @@
   "architecture": "@ARCH@",
   "kind": "service",
   "author": "OneKVM",
-  "homepage": "https://github.com/onekvm/onekvm-extension-edid",
-  "entrypoint": "bin/onekvm-extension-edid",
+  "homepage": "https://github.com/onekvm/onekvm-extension-edid-editor",
   "permissions": [],
   "capabilities": [],
   "device_compatibility": [
-    {"machine": "nanokvm", "variants": ["cube", "pcie", "lite"]}
+    {"machine": "nanokvm", "variants": ["cube", "pcie", "lite"]},
+    {"machine": "nanokvm-pro"}
   ],
   "default_enabled": true,
   "icon": {"source": "lucide", "name": "monitor"},
@@ -35,26 +35,37 @@
     "entrypoint": "web/page.js",
     "icon": {"source": "lucide", "name": "monitor"}
   },
-  "controller": {
-    "runtime": "executable",
-    "entrypoint": "bin/onekvm-extension-edid",
-    "arguments": ["--controller"],
-    "timeout_seconds": 5
-  },
-  "methods": {
-    "list": {},
-    "read": {},
-    "save": {},
-    "delete": {}
-  },
-  "directories": [
+  "methods": [
     {
-      "id": "presets",
-      "kind": "edid",
-      "role": "preset",
-      "path": "share/edid",
-      "location": "package"
+      "name": "list",
+      "command": ["bin/onekvm-extension-edid-editor", "list"],
+      "args": []
     },
+    {
+      "name": "read",
+      "command": ["bin/onekvm-extension-edid-editor", "read"],
+      "args": [
+        {"name": "source", "type": "string", "required": true},
+        {"name": "id", "type": "string", "required": true}
+      ]
+    },
+    {
+      "name": "save",
+      "command": ["bin/onekvm-extension-edid-editor", "save"],
+      "args": [
+        {"name": "id", "type": "string", "required": true},
+        {"name": "data_hex", "type": "string", "required": true}
+      ]
+    },
+    {
+      "name": "delete",
+      "command": ["bin/onekvm-extension-edid-editor", "delete"],
+      "args": [
+        {"name": "id", "type": "string", "required": true}
+      ]
+    }
+  ],
+  "directories": [
     {
       "id": "custom",
       "kind": "edid",
@@ -79,16 +90,10 @@
     }
   },
   "secret_fields": [],
-  "memory_budget": "1M",
   "resource_limits": {
     "memory_max": "8M",
     "cpu_quota": "10%",
     "tasks_max": 8,
     "limit_nofile": 16
-  },
-  "healthcheck": {
-    "type": "exec",
-    "command": ["bin/onekvm-extension-edid", "--health"],
-    "timeout_seconds": 5
   }
 }

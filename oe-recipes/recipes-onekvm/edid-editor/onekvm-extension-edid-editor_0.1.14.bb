@@ -10,7 +10,7 @@ SRCREV = "${ONEKVM_COMPONENT_SRCREV}"
 
 inherit onekvm-extension
 
-ONEKVM_EXTENSION_ID = "edid"
+ONEKVM_EXTENSION_ID = "edid-editor"
 ONEKVM_EXTENSION_API_VERSION = "2"
 
 RPROVIDES:${PN} += "onekvm-extension-edid"
@@ -20,6 +20,8 @@ RCONFLICTS:${PN} += "onekvm-extension-edid"
 do_configure[noexec] = "1"
 
 do_compile() {
+    # externalsrc may contain a binary from another target architecture.
+    oe_runmake -C ${S} clean
     oe_runmake -C ${S} \
         CC="${CC}" \
         CFLAGS="${CFLAGS}" \
