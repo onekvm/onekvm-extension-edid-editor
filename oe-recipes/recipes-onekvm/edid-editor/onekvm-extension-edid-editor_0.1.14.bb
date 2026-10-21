@@ -1,7 +1,7 @@
 SUMMARY = "OneKVM HDMI EDID file editor extension"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=3c35942c830dfe74afdd64f3eb8c0bb5"
-PR = "r1"
+PR = "r2"
 
 ONEKVM_COMPONENT_GIT_URI ??= "git://github.com/onekvm/onekvm-extension-edid-editor.git;protocol=https;branch=main"
 ONEKVM_COMPONENT_SRCREV ??= ""
