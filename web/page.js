@@ -63,7 +63,8 @@
       hdmi: 'Current HDMI',
       loadingHdmi: 'Reading current HDMI EDID…',
       loadingFile: 'Loading EDID…',
-      presets: 'Built-in presets',
+      presets: 'Built-in presets', common: 'Common',
+      factory: 'Factory preset',
       custom: 'Custom files',
       groupHdmi: 'HDMI',
       noHdmi: 'Current HDMI EDID is unavailable.',
@@ -131,7 +132,8 @@
       hdmi: '当前 HDMI',
       loadingHdmi: '正在读取当前 HDMI EDID…',
       loadingFile: '正在载入 EDID…',
-      presets: '内置预设',
+      presets: '内置预设', common: '常用',
+      factory: '出厂预设',
       custom: '自定义文件',
       groupHdmi: 'HDMI',
       noHdmi: '当前 HDMI EDID 不可用。',
@@ -199,7 +201,8 @@
       hdmi: '目前 HDMI',
       loadingHdmi: '正在讀取目前 HDMI EDID…',
       loadingFile: '正在載入 EDID…',
-      presets: '內建預設',
+      presets: '內建預設', common: '常用',
+      factory: '出廠預設',
       custom: '自訂檔案',
       groupHdmi: 'HDMI',
       noHdmi: '目前 HDMI EDID 無法取得。',
@@ -509,6 +512,48 @@
     return id ? `${id}${SUFFIX}` : ''
   }
 
+  function presetLabel(id) {
+    if (id === 'factory') return t('factory')
+    const mode = presetMode(id)
+    return mode ? `${mode[0]}×${mode[1]} @ ${mode[2]} Hz` : id
+  }
+
+  const ASPECT_RATIOS = ['1:1', '5:4', '4:3', '3:2', '16:10', '16:9', '17:9', '21:9', '32:9', '9:16']
+  function presetMode(id) {
+    const explicit = /^(\d{3,4})x(\d{3,4})p(\d{2,3})$/.exec(id)
+    if (explicit) return explicit.slice(1).map(Number)
+    const labels = {
+      '720p60': [1280, 720, 60], '720p90': [1280, 720, 90], '720p120': [1280, 720, 120],
+      '1080p60': [1920, 1080, 60], '1080p120': [1920, 1080, 120],
+      '1440p30': [2560, 1440, 30], '1440p60': [2560, 1440, 60],
+      '1620p30': [2880, 1620, 30], '2160p30': [3840, 2160, 30],
+    }
+    return labels[id]
+  }
+
+  function presetAliases(mode) {
+    if (!mode) return []
+    return ({
+      '640x480': ['480p', 'VGA'], '854x480': ['480p', 'FWVGA'],
+      '1280x720': ['720p', 'HD'], '1920x1080': ['1080p', 'FHD'],
+      '2560x1440': ['2K', 'QHD', '1440p'], '3840x2160': ['4K', 'UHD', '2160p'],
+    })[`${mode[0]}x${mode[1]}`] || []
+  }
+
+  function presetAspect(mode) {
+    return mode && ASPECT_RATIOS.find((aspect) => {
+      const [w, h] = aspect.split(':').map(Number)
+      return Math.abs((mode[0] / mode[1]) / (w / h) - 1) < 0.02
+    })
+  }
+
+  function filterEdidOption(pattern, option) {
+    const normalize = (value) => value.toLowerCase().replace(/[×*]/g, 'x').replace(/\s+/g, '')
+    const text = normalize(String(option.search ?? option.label ?? ''))
+    const query = pattern.replace(/\s*([x×*:])\s*/gi, '$1').replace(/(\d)\s+(hz)\b/gi, '$1$2')
+    return query.trim().split(/\s+/).every((part) => text.includes(normalize(part)))
+  }
+
   function isValidFileId(value) {
     const id = fileIdFromName(value)
     return ID_PATTERN.test(id) && !id.includes('/')
@@ -557,18 +602,32 @@
       const dialog = useDialog()
       let loadGeneration = 0
 
-      const fileOptions = computed(() => [
-        { label: t('hdmi'), value: 'hdmi:current' },
-        ...[
-          { source: 'preset', label: t('presets'), files: presets.value },
-          { source: 'custom', label: t('custom'), files: custom.value },
-        ].filter((group) => group.files.length).map((group) => ({
-          type: 'group',
-          key: group.source,
-          label: group.label,
-          children: group.files.map((file) => ({ label: fileLabel(file.id), value: `${group.source}:${file.id}` })),
-        })),
-      ])
+      const fileOptions = computed(() => {
+        const options = [{ label: t('hdmi'), value: 'hdmi:current' }]
+        const files = presets.value.map((file) => {
+          const mode = presetMode(file.id)
+          const aspect = presetAspect(mode)
+          const label = presetLabel(file.id)
+          const aliases = presetAliases(mode)
+          return { label, mode, aspect, aliases, value: `preset:${file.id}`,
+            search: `${label} ${file.id} ${aspect || ''} ${aliases.join(' ')} ${aliases.map((alias) => alias + mode[2]).join(' ')}` }
+        })
+        const common = files.filter((file) => file.aliases.length).sort((a, b) =>
+          b.mode[1] - a.mode[1] || b.mode[0] - a.mode[0] || b.mode[2] - a.mode[2]).map((file) => ({
+            ...file, label: `${file.aliases.join(' / ')} · ${file.label}`, value: `${file.value}:common`,
+          }))
+        if (common.length) options.push({ type: 'group', key: 'common', label: t('common'), children: common })
+        const other = files.filter((file) => !file.aspect)
+        if (other.length) options.push({ type: 'group', key: 'preset', label: t('presets'), children: other })
+        for (const aspect of ASPECT_RATIOS) {
+          const children = files.filter((file) => file.aspect === aspect).sort((a, b) =>
+            a.mode[1] - b.mode[1] || a.mode[0] - b.mode[0] || a.mode[2] - b.mode[2])
+          if (children.length) options.push({ type: 'group', key: `preset:${aspect}`, label: aspect, children })
+        }
+        if (custom.value.length) options.push({ type: 'group', key: 'custom', label: t('custom'),
+          children: custom.value.map((file) => ({ label: fileLabel(file.id), value: `custom:${file.id}` })) })
+        return options
+      })
       const templateOptions = TEMPLATES.map((item) => ({ label: item.label, value: item.id }))
       const loaded = computed(() => validEdid(bytesFromHex(hex.value)))
       const manufacturerValid = computed(() => /^[A-Z]{3}$/.test(manufacturer.value))
@@ -1081,7 +1140,10 @@
           h(NSelect, {
             value: selection.value,
             options: fileOptions.value,
+            menuProps: { class: 'edid-editor-source-menu' },
+            virtualScroll: false,
             filterable: true,
+            filter: filterEdidOption,
             disabled: Boolean(busy.value),
             loading: busy.value === 'load',
             'onUpdate:value': (value) => { selection.value = value },
@@ -1233,6 +1295,7 @@
       .edid-editor { display: grid; gap: 12px; min-width: 0; }
       .edid-editor h3 { margin: 0; }
       .edid-editor p { margin: 0; }
+      .n-base-select-menu.edid-editor-source-menu .n-base-select-option .n-base-select-option__content { white-space: normal; overflow-wrap: anywhere; }
       .edid-split { display: grid; gap: 16px; min-width: 0; }
       .edid-form { container-type: inline-size; display: grid; gap: 12px; min-width: 0; align-content: start; }
       .edid-import-alert { margin: 0; }
