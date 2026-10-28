@@ -4,15 +4,15 @@
   "i18n": {
     "default": {
       "name": "EDID Editor",
-      "description": "Edit HDMI EDID files. Core applies a saved file to the capture chip."
+      "description": "Edit display information. A saved file is applied to the capture chip."
     },
     "zh": {
       "name": "EDID 编辑器",
-      "description": "编辑 HDMI EDID 文件。Core 负责把保存的文件应用到采集芯片。"
+      "description": "编辑显示器信息，保存后应用到采集芯片。"
     },
     "zh-TW": {
       "name": "EDID 編輯器",
-      "description": "編輯 HDMI EDID 檔案。Core 負責把儲存的檔案套用到擷取晶片。"
+      "description": "編輯顯示器資訊，儲存後套用到擷取晶片。"
     }
   },
   "version": "@VERSION@",
