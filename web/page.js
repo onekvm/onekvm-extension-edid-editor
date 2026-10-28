@@ -1,7 +1,7 @@
 (() => {
   const runtime = window.OneKVMPluginUI.v1
   const { computed, defineComponent, h, onMounted, ref, watch } = runtime.vue
-  const { NAlert, NButton, NCollapse, NCollapseItem, NInput, NInputNumber, NSelect, NSpin, NTabPane, NTabs, useDialog, useMessage } = runtime.naive
+  const { NAlert, NButton, NCollapse, NCollapseItem, NInput, NInputNumber, NSelect, NSpin, NTabPane, NTabs, NTooltip, useDialog, useMessage } = runtime.naive
   const t = runtime.i18n.createTranslator({
     default: {
       title: 'EDID files',
@@ -49,6 +49,10 @@
       remove: 'Delete custom file',
       apply: 'Apply to HDMI',
       applyHint: 'Apply the current EDID to the HDMI input.',
+      writeMode: 'Write mode', permanent: 'Permanent write', temporary: 'Temporary write',
+      permanentHint: 'Survives power loss. Writes to persistent storage.',
+      temporaryHint: 'Stored in RAM. Lost when the capture chip loses power or is reset. HDMI reconnects briefly.',
+      modeUnsupported: 'This device does not support this write mode.',
       empty: 'No EDID loaded yet.',
       invalidName: 'Use a file name like my-display.edid.bin.',
       invalidEdid: 'EDID blob is invalid.',
@@ -118,6 +122,10 @@
       remove: '删除自定义文件',
       apply: '应用到 HDMI',
       applyHint: '将当前 EDID 应用到 HDMI 输入。',
+      writeMode: '写入方式', permanent: '永久写入', temporary: '临时写入',
+      permanentHint: '写入持久存储，断电后保留。',
+      temporaryHint: '仅写入 RAM，采集芯片断电或复位后失效；应用时 HDMI 会短暂重连。',
+      modeUnsupported: '当前设备不支持此写入方式。',
       empty: '尚未载入 EDID。',
       invalidName: '文件名形如 my-display.edid.bin。',
       invalidEdid: 'EDID 内容无效。',
@@ -187,6 +195,10 @@
       remove: '刪除自訂檔案',
       apply: '套用到 HDMI',
       applyHint: '將目前 EDID 套用至 HDMI 輸入。',
+      writeMode: '寫入方式', permanent: '永久寫入', temporary: '臨時寫入',
+      permanentHint: '寫入持久儲存，斷電後保留。',
+      temporaryHint: '僅寫入 RAM，擷取晶片斷電或重設後失效；套用時 HDMI 會短暫重新連線。',
+      modeUnsupported: '目前裝置不支援此寫入方式。',
       empty: '尚未載入 EDID。',
       invalidName: '檔名形如 my-display.edid.bin。',
       invalidEdid: 'EDID 內容無效。',
@@ -589,6 +601,23 @@
       const custom = ref([])
       const selection = ref('hdmi:current')
       const hdmiWritable = ref(false)
+      const hdmiStatus = ref(null)
+      const writeMode = ref('permanent')
+      const hasWriteModes = computed(() => hdmiStatus.value?.write_modes?.permanent || hdmiStatus.value?.write_modes?.temporary)
+      const writeModeOptions = computed(() => ['permanent', 'temporary'].map(mode => ({
+        value: mode, label: t(mode), disabled: !hdmiStatus.value?.write_modes?.[mode],
+      })))
+      function setHdmiStatus(body) {
+        hdmiStatus.value = body
+        hdmiWritable.value = Boolean(body.writable)
+        if (hasWriteModes.value && !body.write_modes[writeMode.value])
+          writeMode.value = body.write_modes.permanent ? 'permanent' : 'temporary'
+      }
+      async function refreshHdmiStatus() {
+        const response = await fetch('/api/video/edid', { credentials: 'same-origin', cache: 'no-store' })
+        if (!response.ok) { hdmiWritable.value = false; throw new Error(t('noHdmi')) }
+        setHdmiStatus(await response.json())
+      }
       const loadedKind = ref('')
       const loadedId = ref('')
       const fileName = ref('')
@@ -738,7 +767,7 @@
             }
             const body = await response.json()
             if (generation !== loadGeneration) return
-            hdmiWritable.value = Boolean(body.writable)
+            setHdmiStatus(body)
             data = bytesFromHex(body.data_hex || '')
             if (!data) throw new Error(t('noHdmi'))
             meta = { kind: 'hdmi', id: '' }
@@ -856,11 +885,13 @@
         busy.value = 'apply'
         error.value = ''
         try {
+          const requestedMode = writeMode.value
+          await refreshHdmiStatus()
           const response = await fetch('/api/video/edid', {
             method: 'PUT',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data_hex: hexFromBytes(data) }),
+            body: JSON.stringify({ data_hex: hexFromBytes(data), mode: requestedMode === 'temporary' || hasWriteModes.value ? requestedMode : undefined }),
           })
           const body = await response.json().catch(() => ({}))
           if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`)
@@ -882,7 +913,7 @@
       })
 
       onMounted(() => {
-        reloadCatalog().then(() => loadSelection()).catch((reason) => {
+        Promise.all([reloadCatalog(), refreshHdmiStatus()]).then(() => loadSelection()).catch((reason) => {
           error.value = reasonText(reason)
         }).finally(() => {
           busy.value = ''
@@ -1166,6 +1197,13 @@
               class: ['edid-mode', timing.preferred ? 'is-preferred' : ''],
             }, timingLabel(timing)))),
           ]) : h('p', { class: 'edid-empty' }, t('empty')),
+          hasWriteModes.value ? row(t('writeMode'), h(NSelect, {
+            value: writeMode.value, options: writeModeOptions.value, disabled: Boolean(busy.value),
+            'onUpdate:value': value => { writeMode.value = value },
+            renderOption: ({ node, option }) => option.disabled
+              ? h(NTooltip, null, { trigger: () => h('span', { style: 'display:block' }, [node]), default: () => t('modeUnsupported') }) : node,
+          })) : null,
+          hasWriteModes.value ? h('p', { class: 'edid-hint' }, t(writeMode.value === 'temporary' ? 'temporaryHint' : 'permanentHint')) : null,
           h('div', { class: 'edid-actions' }, [
             h(NButton, { type: 'primary', disabled: !loaded.value || !manufacturerValid.value || !hdmiWritable.value || Boolean(busy.value), loading: busy.value === 'apply', onClick: applyHdmi }, { default: () => t('apply') }),
           ]),
