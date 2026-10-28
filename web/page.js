@@ -359,7 +359,7 @@
   function writeName(dst, name) {
     dst.fill(0)
     dst[3] = 0xfc
-    const text = new TextEncoder().encode(String(name || '').slice(0, 13))
+    const text = new TextEncoder().encode(String(name || '').replace(/[^\x20-\x7e]/g, '?').slice(0, 13))
     dst.set(text, 5)
     if (text.length < 13) {
       dst[5 + text.length] = 0x0a
@@ -446,18 +446,23 @@
       const hit = VICS.find((item) => item.width === timing.width && item.height === timing.height && item.fps === timing.fps)
       if (hit && !vics.includes(hit.vic)) vics.push(hit.vic)
     }
-    return vics.length ? vics : [16, 4]
+    // Do not claim a CTA VIC that is absent from the requested timings.  The
+    // base-block DTD remains the preferred mode; VIC 1 is only a safe legacy
+    // fallback for sources that require a CTA video mode.
+    return vics.length ? vics : [1]
   }
 
   function writeCEA(dst, vics, extra) {
     dst.fill(0)
     dst[0] = 0x02
     dst[1] = 0x03
+    // The preferred timing is in the base block.  CTA DTDs are additional
+    // modes, so none of them is marked native.
+    dst[3] = 0xf0
     let offset = 4
-    dst[offset] = 0x40 | (vics.length + 1)
-    dst[offset + 1] = 0x00
-    for (let i = 0; i < vics.length; i++) dst[offset + 2 + i] = vics[i] & 0xff
-    offset += 2 + vics.length
+    dst[offset] = 0x40 | vics.length
+    for (let i = 0; i < vics.length; i++) dst[offset + 1 + i] = vics[i] & 0xff
+    offset += 1 + vics.length
     dst[2] = offset
     for (const timing of extra) {
       if (offset + 18 > 127) break
