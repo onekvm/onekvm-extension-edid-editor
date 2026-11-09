@@ -198,7 +198,7 @@
   },
   "contributions": [
     {
-      "point": "mcp.tool",
+      "point": "extend.mcp",
       "id": "list-edids",
       "version": 1,
       "method": "list",
@@ -228,7 +228,7 @@
       }
     },
     {
-      "point": "mcp.tool",
+      "point": "extend.mcp",
       "id": "read-edid",
       "version": 1,
       "method": "read",
@@ -276,7 +276,7 @@
       }
     },
     {
-      "point": "mcp.tool",
+      "point": "extend.mcp",
       "id": "save-edid",
       "version": 1,
       "method": "save",
@@ -324,7 +324,7 @@
       }
     },
     {
-      "point": "mcp.tool",
+      "point": "extend.mcp",
       "id": "delete-edid",
       "version": 1,
       "method": "delete",
@@ -364,7 +364,7 @@
       }
     },
     {
-      "point": "mcp.tool",
+      "point": "extend.mcp",
       "id": "validate-edid",
       "version": 1,
       "method": "validate",
@@ -404,7 +404,7 @@
       }
     },
     {
-      "point": "mcp.tool",
+      "point": "extend.mcp",
       "id": "read-hdmi",
       "version": 1,
       "method": "read_hdmi",
@@ -434,7 +434,7 @@
       }
     },
     {
-      "point": "mcp.tool",
+      "point": "extend.mcp",
       "id": "apply-hdmi",
       "version": 1,
       "method": "apply_hdmi",
