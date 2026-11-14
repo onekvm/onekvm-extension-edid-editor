@@ -18,7 +18,7 @@ Core 显示设置也可以直接应用内置机型预设，不依赖安装本编
 
 本插件管理 EDID 文件，并通过 Core 的 `PUT /api/video/edid` 应用到采集芯片。
 
-支持 NanoKVM Cube/PCIe/Lite 和 NanoKVM Pro。预装时默认启用，文件操作按需执行，
+支持 NanoKVM Cube/PCIe/Lite、NanoKVM Pro 和 NanoKVM Go。预装时默认启用，文件操作按需执行，
 不运行常驻进程。
 
 NanoKVM 预设源码和支持模式见

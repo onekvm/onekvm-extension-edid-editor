@@ -61,7 +61,7 @@ node tests/edid-format.test.cjs
 The CLI checks compile a native test executable and use temporary custom-file
 directories. They do not write to HDMI.
 
-The editor supports NanoKVM Cube/PCIe/Lite and NanoKVM Pro. Preinstalled copies
+The editor supports NanoKVM Cube/PCIe/Lite, NanoKVM Pro and NanoKVM Go. Preinstalled copies
 are enabled by default; file operations run on demand without a resident process.
 
 For NanoKVM preset sources and supported modes, see

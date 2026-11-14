@@ -37,6 +37,9 @@
     },
     {
       "machine": "nanokvm-pro"
+    },
+    {
+      "machine": "nanokvm-go"
     }
   ],
   "default_enabled": true,
