@@ -2,8 +2,7 @@
 
 OneKVM HDMI EDID 文件编辑器。编辑器分组显示内置机型预设和自定义文件。
 预设可以查看，并作为编辑起点；保存时写入自定义文件，保留内置预设原件。
-Core 和当前机型包在 `/usr/share/onekvm/edid/presets/*.edid.bin` 提供只读预设
-（出厂预设由 Core 安装，所有机型共用），
+当前机型包在 `/usr/share/onekvm/edid/presets/*.edid.bin` 提供只读预设，
 编辑器自身不携带预设。
 自定义文件在插件数据目录 `ONEKVM_EXTENSION_DATA/edid/*.edid.bin`。
 Core 显示设置也可以直接应用内置机型预设，不依赖安装本编辑器。

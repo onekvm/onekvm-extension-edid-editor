@@ -3,9 +3,8 @@
 OneKVM HDMI EDID file editor. The editor lists built-in machine presets and
 custom files separately. Presets can be viewed and used as a starting point
 for editing; saving creates a custom file and keeps the machine preset intact.
-Core and the current machine package supply read-only presets in
-`/usr/share/onekvm/edid/presets/*.edid.bin` (Core installs the factory preset
-every machine shares); this extension bundles no presets.
+The current machine package supplies read-only presets in
+`/usr/share/onekvm/edid/presets/*.edid.bin`; this extension bundles no presets.
 Custom blobs live in the extension data directory
 (`ONEKVM_EXTENSION_DATA/edid/*.edid.bin`). Core Display settings can also apply
 the machine presets, even when this extension is not installed.
