@@ -18,14 +18,50 @@ Opening the page or switching back to Current HDMI reads the EDID again, with a
 loading indicator until the display information or error is available.
 
 The extension has no resident backend or health check. Its manifest declares
-the bundled CLI command and typed arguments for each `list`, `read`, `save`,
-and `delete` method. The Extension Host starts that command only for a method
+the bundled CLI command and typed arguments for file management, validation
+and HDMI methods. The Extension Host starts that command only for a method
 request and returns its JSON output.
 
-This extension edits files. Core applies a chosen blob to the capture
-chip through `PUT /api/video/edid`.
+The extension manages EDID files and applies blobs to the capture chip through
+Core's `PUT /api/video/edid`.
 
-The editor supports NanoKVM Cube/PCIe/Lite and NanoKVM Pro. Preinstalled copies
+## MCP tools
+
+Enable EDID Editor and allow it under MCP's plugin tools policy to use these
+tools. Their display text follows the UI language (English, Simplified Chinese
+or Traditional Chinese).
+
+| Tool | Arguments | Result |
+| --- | --- | --- |
+| `edid-editor__list-edids` | none | Built-in presets and custom file IDs, paths and sizes. |
+| `edid-editor__read-edid` | `source: preset/custom`, `id` | File bytes as `data_hex`. |
+| `edid-editor__save-edid` | `id`, `data_hex` | Creates or replaces a custom file; apply it separately. |
+| `edid-editor__delete-edid` | `id` | Deletes a custom file; current HDMI EDID remains in use. |
+| `edid-editor__validate-edid` | `data_hex` | Checks length, header and each block checksum; returns size and block count. |
+| `edid-editor__read-hdmi` | none | Current HDMI EDID, display summary, write modes and hardware limits. |
+| `edid-editor__apply-hdmi` | `data_hex`, `mode: temporary/permanent` | Applies to HDMI and returns `apply_required`. |
+
+Read HDMI capabilities before applying. Temporary mode writes RAM; permanent
+mode saves persistently. An unsupported mode fails. Applying can interrupt
+video. The returned `apply_required` is `none`, `hotplug`, `reboot` or
+`power_cycle`; perform the indicated action separately.
+
+HDMI methods require a Core build with the managed EDID control interface.
+They use separate `video.edid.read` and `video.edid.write` capabilities and the
+same hardware validation as the Web UI. Presets are read-only. Custom files
+accept 128–512 bytes in 128-byte blocks, with compact hexadecimal MCP input.
+
+## Checks
+
+```sh
+python3 tests/cli.test.py -v
+node tests/edid-format.test.cjs
+```
+
+The CLI checks compile a native test executable and use temporary custom-file
+directories. They do not write to HDMI.
+
+The editor supports NanoKVM Cube/PCIe/Lite, NanoKVM Pro, NanoKVM Go and PicoKVM. Preinstalled copies
 are enabled by default; file operations run on demand without a resident process.
 
 For NanoKVM preset sources and supported modes, see

@@ -22,47 +22,147 @@
   "author": "OneKVM",
   "homepage": "https://github.com/onekvm/onekvm-extension-edid-editor",
   "permissions": [],
-  "capabilities": [],
+  "capabilities": [
+    "video.edid.read",
+    "video.edid.write"
+  ],
   "device_compatibility": [
-    {"machine": "nanokvm", "variants": ["cube", "pcie", "lite"]},
-    {"machine": "nanokvm-pro"}
+    {
+      "machine": "nanokvm",
+      "variants": [
+        "cube",
+        "pcie",
+        "lite"
+      ]
+    },
+    {
+      "machine": "nanokvm-pro"
+    },
+    {
+      "machine": "nanokvm-go"
+    },
+    {
+      "machine": "picokvm"
+    }
   ],
   "default_enabled": true,
-  "icon": {"source": "lucide", "name": "monitor"},
+  "icon": {
+    "source": "lucide",
+    "name": "monitor"
+  },
   "page": {
     "title": "EDID Editor",
     "renderer": "vue",
     "entrypoint": "web/page.js",
-    "icon": {"source": "lucide", "name": "monitor"}
+    "icon": {
+      "source": "lucide",
+      "name": "monitor"
+    }
   },
   "methods": [
     {
       "name": "list",
-      "command": ["bin/onekvm-extension-edid-editor", "list"],
+      "command": [
+        "bin/onekvm-extension-edid-editor",
+        "list"
+      ],
       "args": []
     },
     {
       "name": "read",
-      "command": ["bin/onekvm-extension-edid-editor", "read"],
+      "command": [
+        "bin/onekvm-extension-edid-editor",
+        "read"
+      ],
       "args": [
-        {"name": "source", "type": "string", "required": true},
-        {"name": "id", "type": "string", "required": true}
+        {
+          "name": "source",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true
+        }
       ]
     },
     {
       "name": "save",
-      "command": ["bin/onekvm-extension-edid-editor", "save"],
+      "command": [
+        "bin/onekvm-extension-edid-editor",
+        "save"
+      ],
       "args": [
-        {"name": "id", "type": "string", "required": true},
-        {"name": "data_hex", "type": "string", "required": true}
+        {
+          "name": "id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "data_hex",
+          "type": "string",
+          "required": true
+        }
       ]
     },
     {
       "name": "delete",
-      "command": ["bin/onekvm-extension-edid-editor", "delete"],
+      "command": [
+        "bin/onekvm-extension-edid-editor",
+        "delete"
+      ],
       "args": [
-        {"name": "id", "type": "string", "required": true}
+        {
+          "name": "id",
+          "type": "string",
+          "required": true
+        }
       ]
+    },
+    {
+      "name": "validate",
+      "command": [
+        "bin/onekvm-extension-edid-editor",
+        "validate"
+      ],
+      "args": [
+        {
+          "name": "data_hex",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "read_hdmi",
+      "command": [
+        "bin/onekvm-extension-edid-editor",
+        "read-hdmi"
+      ],
+      "args": [],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "apply_hdmi",
+      "command": [
+        "bin/onekvm-extension-edid-editor",
+        "apply-hdmi"
+      ],
+      "args": [
+        {
+          "name": "data_hex",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "timeout_seconds": 30
     }
   ],
   "directories": [
@@ -78,14 +178,20 @@
   "settings_schema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["service_enabled"],
+    "required": [
+      "service_enabled"
+    ],
     "properties": {
       "service_enabled": {
         "type": "boolean",
         "title": "EDID file editor",
         "default": false,
         "readOnly": true,
-        "i18n": {"default": "EDID file editor", "zh": "EDID 文件编辑器", "zh-TW": "EDID 檔案編輯器"}
+        "i18n": {
+          "default": "EDID file editor",
+          "zh": "EDID 文件编辑器",
+          "zh-TW": "EDID 檔案編輯器"
+        }
       }
     }
   },
@@ -95,5 +201,292 @@
     "cpu_quota": "10%",
     "tasks_max": 8,
     "limit_nofile": 16
-  }
+  },
+  "contributions": [
+    {
+      "point": "extend.mcp",
+      "id": "list-edids",
+      "version": 1,
+      "method": "list",
+      "data": {
+        "title": "List EDID files",
+        "description": "List built-in machine presets and saved custom EDID files with IDs, paths and byte sizes.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "i18n": {
+          "default": {
+            "title": "List EDID files",
+            "description": "List built-in machine presets and saved custom EDID files with IDs, paths and byte sizes."
+          },
+          "zh": {
+            "title": "列出 EDID 文件",
+            "description": "列出机型内置预设和已保存的自定义 EDID 文件，包括 ID、路径和字节数。"
+          },
+          "zh-TW": {
+            "title": "列出 EDID 檔案",
+            "description": "列出機型內建預設和已儲存的自訂 EDID 檔案，包括 ID、路徑和位元組數。"
+          }
+        }
+      }
+    },
+    {
+      "point": "extend.mcp",
+      "id": "read-edid",
+      "version": 1,
+      "method": "read",
+      "data": {
+        "title": "Read EDID file",
+        "description": "Read a preset or custom EDID file as data_hex. Use source and an ID from list-edids.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "preset",
+                "custom"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$",
+              "minLength": 1,
+              "maxLength": 63,
+              "description": "File ID from list-edids, without directory separators or suffix."
+            }
+          },
+          "required": [
+            "source",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "i18n": {
+          "default": {
+            "title": "Read EDID file",
+            "description": "Read a preset or custom EDID file as data_hex. Use source and an ID from list-edids."
+          },
+          "zh": {
+            "title": "读取 EDID 文件",
+            "description": "读取预设或自定义 EDID 文件，返回 data_hex。source 和 ID 来自 list-edids。"
+          },
+          "zh-TW": {
+            "title": "讀取 EDID 檔案",
+            "description": "讀取預設或自訂 EDID 檔案，傳回 data_hex。source 和 ID 來自 list-edids。"
+          }
+        }
+      }
+    },
+    {
+      "point": "extend.mcp",
+      "id": "save-edid",
+      "version": 1,
+      "method": "save",
+      "data": {
+        "title": "Save custom EDID file",
+        "description": "Save valid EDID hex as a custom file, replacing the same custom ID if present. Built-in presets are read-only. Apply separately with apply-hdmi.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$",
+              "minLength": 1,
+              "maxLength": 63,
+              "description": "File ID from list-edids, without directory separators or suffix."
+            },
+            "data_hex": {
+              "type": "string",
+              "minLength": 256,
+              "maxLength": 1024,
+              "pattern": "^[0-9A-Fa-f]+$",
+              "description": "Compact hexadecimal EDID bytes, 128 to 512 decoded bytes in 128-byte blocks with valid header and block checksums."
+            }
+          },
+          "required": [
+            "id",
+            "data_hex"
+          ],
+          "additionalProperties": false
+        },
+        "i18n": {
+          "default": {
+            "title": "Save custom EDID file",
+            "description": "Save valid EDID hex as a custom file, replacing the same custom ID if present. Built-in presets are read-only. Apply separately with apply-hdmi."
+          },
+          "zh": {
+            "title": "保存自定义 EDID 文件",
+            "description": "将有效 EDID 十六进制数据保存为自定义文件，替换同 ID 的已有自定义文件。内置预设只读；另用 apply-hdmi 应用到 HDMI。"
+          },
+          "zh-TW": {
+            "title": "儲存自訂 EDID 檔案",
+            "description": "將有效 EDID 十六進位資料儲存為自訂檔案，取代同 ID 的現有自訂檔案。內建預設唯讀；另用 apply-hdmi 套用到 HDMI。"
+          }
+        }
+      }
+    },
+    {
+      "point": "extend.mcp",
+      "id": "delete-edid",
+      "version": 1,
+      "method": "delete",
+      "data": {
+        "title": "Delete custom EDID file",
+        "description": "Delete a saved custom EDID file by ID. The currently applied HDMI EDID remains in use.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$",
+              "minLength": 1,
+              "maxLength": 63,
+              "description": "File ID from list-edids, without directory separators or suffix."
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "i18n": {
+          "default": {
+            "title": "Delete custom EDID file",
+            "description": "Delete a saved custom EDID file by ID. The currently applied HDMI EDID remains in use."
+          },
+          "zh": {
+            "title": "删除自定义 EDID 文件",
+            "description": "按 ID 删除已保存的自定义 EDID 文件，当前 HDMI 继续使用已应用的 EDID。"
+          },
+          "zh-TW": {
+            "title": "刪除自訂 EDID 檔案",
+            "description": "依 ID 刪除已儲存的自訂 EDID 檔案，目前 HDMI 繼續使用已套用的 EDID。"
+          }
+        }
+      }
+    },
+    {
+      "point": "extend.mcp",
+      "id": "validate-edid",
+      "version": 1,
+      "method": "validate",
+      "data": {
+        "title": "Validate EDID data",
+        "description": "Validate EDID hex length, header and every 128-byte block checksum. Returns valid, size and blocks; invalid data returns an error.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "data_hex": {
+              "type": "string",
+              "minLength": 256,
+              "maxLength": 1024,
+              "pattern": "^[0-9A-Fa-f]+$",
+              "description": "Compact hexadecimal EDID bytes, 128 to 512 decoded bytes in 128-byte blocks with valid header and block checksums."
+            }
+          },
+          "required": [
+            "data_hex"
+          ],
+          "additionalProperties": false
+        },
+        "i18n": {
+          "default": {
+            "title": "Validate EDID data",
+            "description": "Validate EDID hex length, header and every 128-byte block checksum. Returns valid, size and blocks; invalid data returns an error."
+          },
+          "zh": {
+            "title": "校验 EDID 数据",
+            "description": "校验 EDID 十六进制长度、头部和每个 128 字节块的校验和。返回 valid、size 和 blocks；无效数据返回错误。"
+          },
+          "zh-TW": {
+            "title": "驗證 EDID 資料",
+            "description": "驗證 EDID 十六進位長度、標頭和每個 128 位元組區塊的總和檢查碼。傳回 valid、size 和 blocks；無效資料傳回錯誤。"
+          }
+        }
+      }
+    },
+    {
+      "point": "extend.mcp",
+      "id": "read-hdmi",
+      "version": 1,
+      "method": "read_hdmi",
+      "data": {
+        "title": "Read current HDMI EDID",
+        "description": "Read current HDMI EDID hex and display summary, supported write_modes, byte limits and apply policy. Check this before apply-hdmi.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        },
+        "i18n": {
+          "default": {
+            "title": "Read current HDMI EDID",
+            "description": "Read current HDMI EDID hex and display summary, supported write_modes, byte limits and apply policy. Check this before apply-hdmi."
+          },
+          "zh": {
+            "title": "读取当前 HDMI EDID",
+            "description": "读取当前 HDMI EDID 十六进制数据、显示摘要、支持的 write_modes、字节数限制和生效方式。调用 apply-hdmi 前先读取。"
+          },
+          "zh-TW": {
+            "title": "讀取目前 HDMI EDID",
+            "description": "讀取目前 HDMI EDID 十六進位資料、顯示摘要、支援的 write_modes、位元組數限制和生效方式。呼叫 apply-hdmi 前先讀取。"
+          }
+        }
+      }
+    },
+    {
+      "point": "extend.mcp",
+      "id": "apply-hdmi",
+      "version": 1,
+      "method": "apply_hdmi",
+      "data": {
+        "title": "Apply EDID to HDMI",
+        "description": "Apply valid EDID hex using an explicit mode: temporary for RAM or permanent for persistent storage. Check read-hdmi write_modes and byte limits first; unsupported modes fail without fallback. May interrupt video. Returns apply_required: none, hotplug, reboot or power_cycle; any required action must be performed separately.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "data_hex": {
+              "type": "string",
+              "minLength": 256,
+              "maxLength": 1024,
+              "pattern": "^[0-9A-Fa-f]+$",
+              "description": "Compact hexadecimal EDID bytes, 128 to 512 decoded bytes in 128-byte blocks with valid header and block checksums."
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "temporary",
+                "permanent"
+              ],
+              "description": "Explicit storage mode supported by read-hdmi write_modes."
+            }
+          },
+          "required": [
+            "data_hex",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        "i18n": {
+          "default": {
+            "title": "Apply EDID to HDMI",
+            "description": "Apply valid EDID hex using an explicit mode: temporary for RAM or permanent for persistent storage. Check read-hdmi write_modes and byte limits first; unsupported modes fail without fallback. May interrupt video. Returns apply_required: none, hotplug, reboot or power_cycle; any required action must be performed separately."
+          },
+          "zh": {
+            "title": "应用 EDID 到 HDMI",
+            "description": "应用有效 EDID 十六进制数据，明确选择 temporary（RAM 临时写入）或 permanent（永久保存）。先通过 read-hdmi 核对 write_modes 和字节数限制；不支持的模式会失败。可能中断视频；返回 apply_required：none、hotplug、reboot 或 power_cycle，所需操作另行执行。"
+          },
+          "zh-TW": {
+            "title": "套用 EDID 到 HDMI",
+            "description": "套用有效 EDID 十六進位資料，明確選擇 temporary（RAM 暫時寫入）或 permanent（永久儲存）。先透過 read-hdmi 核對 write_modes 和位元組數限制；不支援的模式會失敗。可能中斷視訊；傳回 apply_required：none、hotplug、reboot 或 power_cycle，所需操作另行執行。"
+          }
+        }
+      }
+    }
+  ]
 }
