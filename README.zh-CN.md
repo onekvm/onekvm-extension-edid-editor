@@ -2,7 +2,8 @@
 
 OneKVM HDMI EDID 文件编辑器。编辑器分组显示内置机型预设和自定义文件。
 预设可以查看，并作为编辑起点；保存时写入自定义文件，保留内置预设原件。
-当前机型包在 `/usr/share/onekvm/edid/presets/*.edid.bin` 提供只读预设，
+Core 和当前机型包在 `/usr/share/onekvm/edid/presets/*.edid.bin` 提供只读预设
+（出厂预设由 Core 安装，所有机型共用），
 编辑器自身不携带预设。
 自定义文件在插件数据目录 `ONEKVM_EXTENSION_DATA/edid/*.edid.bin`。
 Core 显示设置也可以直接应用内置机型预设，不依赖安装本编辑器。
@@ -18,7 +19,7 @@ Core 显示设置也可以直接应用内置机型预设，不依赖安装本编
 
 本插件管理 EDID 文件，并通过 Core 的 `PUT /api/video/edid` 应用到采集芯片。
 
-支持 NanoKVM Cube/PCIe/Lite、NanoKVM Pro 和 NanoKVM Go。预装时默认启用，文件操作按需执行，
+支持 NanoKVM Cube/PCIe/Lite、NanoKVM Pro、NanoKVM Go 和 PicoKVM。预装时默认启用，文件操作按需执行，
 不运行常驻进程。
 
 NanoKVM 预设源码和支持模式见

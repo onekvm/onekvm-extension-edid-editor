@@ -3,8 +3,9 @@
 OneKVM HDMI EDID file editor. The editor lists built-in machine presets and
 custom files separately. Presets can be viewed and used as a starting point
 for editing; saving creates a custom file and keeps the machine preset intact.
-The current machine package supplies read-only presets in
-`/usr/share/onekvm/edid/presets/*.edid.bin`; this extension bundles no presets.
+Core and the current machine package supply read-only presets in
+`/usr/share/onekvm/edid/presets/*.edid.bin` (Core installs the factory preset
+every machine shares); this extension bundles no presets.
 Custom blobs live in the extension data directory
 (`ONEKVM_EXTENSION_DATA/edid/*.edid.bin`). Core Display settings can also apply
 the machine presets, even when this extension is not installed.
@@ -61,7 +62,7 @@ node tests/edid-format.test.cjs
 The CLI checks compile a native test executable and use temporary custom-file
 directories. They do not write to HDMI.
 
-The editor supports NanoKVM Cube/PCIe/Lite, NanoKVM Pro and NanoKVM Go. Preinstalled copies
+The editor supports NanoKVM Cube/PCIe/Lite, NanoKVM Pro, NanoKVM Go and PicoKVM. Preinstalled copies
 are enabled by default; file operations run on demand without a resident process.
 
 For NanoKVM preset sources and supported modes, see

@@ -40,6 +40,9 @@
     },
     {
       "machine": "nanokvm-go"
+    },
+    {
+      "machine": "picokvm"
     }
   ],
   "default_enabled": true,
